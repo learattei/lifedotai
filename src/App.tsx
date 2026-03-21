@@ -1263,7 +1263,7 @@ const WorkMode = ({
   projects: Project[],
   onUpdateTasks: (t: Task[]) => void
 }) => {
-  const [mode, setMode] = useState<'task-database' | 'overview' | 'bingo' | 'wheel' | 'pomodoro'>('task-database');
+  const [mode, setMode] = useState<'overview' | 'bingo' | 'wheel' | 'pomodoro' | 'task-database'>('overview');
 
   // ---- Overview ----
   const toggleTask = (taskId: string) => {
@@ -1397,11 +1397,11 @@ const WorkMode = ({
   };
 
   const tabs = [
-    { id: 'task-database' as const, label: 'Task DB' },
     { id: 'overview' as const, label: 'Overview' },
     { id: 'bingo' as const, label: 'Bingo' },
     { id: 'wheel' as const, label: 'Wheel' },
     { id: 'pomodoro' as const, label: 'Pomodoro' },
+    { id: 'task-database' as const, label: 'Task DB' },
   ];
 
   return (

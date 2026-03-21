@@ -41,7 +41,8 @@ import {
   RefreshCw,
   Dices,
   Grid3X3,
-  Sparkles
+  Sparkles,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI } from "@google/genai";
@@ -97,7 +98,7 @@ interface Project {
   status: 'on-track' | 'at-risk' | 'completed';
   deadline: string;
   description: string;
-  tasks: string[]; // task IDs or titles, keeping it flexible for now
+  tasks: { id: string; title: string; done: boolean }[];
 }
 
 interface Note {
@@ -1983,6 +1984,33 @@ const ProjectsTab = ({
     deadline: '',
     status: 'on-track' as const
   });
+  const [isAddingTask, setIsAddingTask] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+
+  const handleToggleTask = (taskId: string) => {
+    if (!selectedProject) return;
+    const updatedTasks = selectedProject.tasks.map(t =>
+      t.id === taskId ? { ...t, done: !t.done } : t
+    );
+    const doneTasks = updatedTasks.filter(t => t.done).length;
+    const progress = updatedTasks.length > 0 ? Math.round((doneTasks / updatedTasks.length) * 100) : 0;
+    const updated = { ...selectedProject, tasks: updatedTasks, progress };
+    onUpdateProject(updated);
+    setSelectedProject(updated);
+  };
+
+  const handleAddTask = () => {
+    if (!newTaskTitle.trim() || !selectedProject) return;
+    const newTask = { id: Math.random().toString(36).substr(2, 9), title: newTaskTitle.trim(), done: false };
+    const updatedTasks = [...selectedProject.tasks, newTask];
+    const doneTasks = updatedTasks.filter(t => t.done).length;
+    const progress = updatedTasks.length > 0 ? Math.round((doneTasks / updatedTasks.length) * 100) : 0;
+    const updated = { ...selectedProject, tasks: updatedTasks, progress };
+    onUpdateProject(updated);
+    setSelectedProject(updated);
+    setNewTaskTitle('');
+    setIsAddingTask(false);
+  };
 
   const handleAddProject = () => {
     if (!newProject.title) return;
@@ -2020,15 +2048,36 @@ const ProjectsTab = ({
 
             <Card title="Project Tasks">
               <div className="space-y-4">
-                {selectedProject.tasks.map((task: string, i: number) => (
-                  <div key={i} className="flex items-center gap-4 p-4 glass-card rounded-2xl">
-                    <div className="w-6 h-6 rounded-full border-2 border-white/20" />
-                    <span className="font-medium text-white">{task}</span>
+                {selectedProject.tasks.map((task) => (
+                  <div key={task.id} className="flex items-center gap-4 p-4 glass-card rounded-2xl">
+                    <button
+                      onClick={() => handleToggleTask(task.id)}
+                      className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${task.done ? 'bg-white/80 border-white/80' : 'border-white/20 hover:border-white/50'}`}
+                    >
+                      {task.done && <Check size={12} className="text-black" />}
+                    </button>
+                    <span className={`font-medium transition-all ${task.done ? 'line-through text-white/30' : 'text-white'}`}>{task.title}</span>
                   </div>
                 ))}
-                <button className="w-full py-3 border border-dashed border-white/20 rounded-2xl text-xs font-bold text-white/40 hover:bg-white/10 transition-all uppercase tracking-widest">
-                  + Add Task to Project
-                </button>
+                {isAddingTask ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      autoFocus
+                      type="text"
+                      value={newTaskTitle}
+                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddTask(); if (e.key === 'Escape') { setIsAddingTask(false); setNewTaskTitle(''); } }}
+                      placeholder="Task title..."
+                      className="flex-1 p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30"
+                    />
+                    <button onClick={handleAddTask} className="px-3 py-3 bg-white/20 rounded-xl text-white text-sm font-bold hover:bg-white/30 transition-all">Add</button>
+                    <button onClick={() => { setIsAddingTask(false); setNewTaskTitle(''); }} className="px-3 py-3 text-white/40 hover:text-white transition-all"><X size={16} /></button>
+                  </div>
+                ) : (
+                  <button onClick={() => setIsAddingTask(true)} className="w-full py-3 border border-dashed border-white/20 rounded-2xl text-xs font-bold text-white/40 hover:bg-white/10 transition-all uppercase tracking-widest">
+                    + Add Task to Project
+                  </button>
+                )}
               </div>
             </Card>
           </div>
@@ -3359,9 +3408,9 @@ export default function App() {
   const [isOverwhelmed, setIsOverwhelmed] = useState(false);
   const [visionData, setVisionData] = useState<LifeVisionData | null>(null);
   const [projects, setProjects] = useState<Project[]>([
-    { id: '1', title: 'lifedotAI MVP', progress: 65, status: 'on-track', deadline: 'Mar 30', description: 'Building the first version of the life management AI.', tasks: ['Implement Work Mode', 'Fix Calendar Alignment', 'Refine News UI'] },
-    { id: '2', title: 'Health Transformation', progress: 40, status: 'at-risk', deadline: 'Apr 15', description: 'Focusing on physical and mental well-being.', tasks: ['Daily 5km run', 'Meditation 10min', 'Meal prep'] },
-    { id: '3', title: 'Financial Freedom Plan', progress: 20, status: 'on-track', deadline: 'Dec 31', description: 'Long-term wealth building and budgeting.', tasks: ['Set up emergency fund', 'Automate savings', 'Review investments'] }
+    { id: '1', title: 'lifedotAI MVP', progress: 65, status: 'on-track', deadline: 'Mar 30', description: 'Building the first version of the life management AI.', tasks: [{ id: '1a', title: 'Implement Work Mode', done: true }, { id: '1b', title: 'Fix Calendar Alignment', done: false }, { id: '1c', title: 'Refine News UI', done: false }] },
+    { id: '2', title: 'Health Transformation', progress: 40, status: 'at-risk', deadline: 'Apr 15', description: 'Focusing on physical and mental well-being.', tasks: [{ id: '2a', title: 'Daily 5km run', done: false }, { id: '2b', title: 'Meditation 10min', done: false }, { id: '2c', title: 'Meal prep', done: false }] },
+    { id: '3', title: 'Financial Freedom Plan', progress: 20, status: 'on-track', deadline: 'Dec 31', description: 'Long-term wealth building and budgeting.', tasks: [{ id: '3a', title: 'Set up emergency fund', done: false }, { id: '3b', title: 'Automate savings', done: false }, { id: '3c', title: 'Review investments', done: false }] }
   ]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([

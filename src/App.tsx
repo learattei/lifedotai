@@ -89,6 +89,7 @@ interface Task {
   isStrategic: boolean;
   isFrog: boolean;
   status: 'todo' | 'done';
+  notes?: string;
 }
 
 interface Project {
@@ -1272,6 +1273,21 @@ const WorkMode = ({
     ));
   };
 
+  const [detailTask, setDetailTask] = useState<Task | null>(null);
+
+  const openDetail = (task: Task) => setDetailTask({ ...task });
+
+  const saveDetail = () => {
+    if (!detailTask) return;
+    onUpdateTasks(allTasks.map(t => t.id === detailTask.id ? detailTask : t));
+    setDetailTask(null);
+  };
+
+  const deleteTask = (taskId: string) => {
+    onUpdateTasks(allTasks.filter(t => t.id !== taskId));
+    if (detailTask?.id === taskId) setDetailTask(null);
+  };
+
   // ---- Bingo ----
   const makeBingoBoard = (): (Task | null)[] => {
     const todo = allTasks.filter(t => t.status === 'todo');
@@ -1438,50 +1454,41 @@ const WorkMode = ({
                 <p className="text-white/40">No tasks yet. Add tasks in the Task DB tab.</p>
               </div>
             )}
-            {projects.map(project => {
-              const pts = allTasks.filter(t => t.projectId === project.id);
-              if (pts.length === 0) return null;
-              const done = pts.filter(t => t.status === 'done').length;
-              return (
-                <Card key={project.id} title={`${project.title} — ${done}/${pts.length}`}>
-                  <div className="space-y-1">
-                    {pts.map(task => (
-                      <div key={task.id} onClick={() => toggleTask(task.id)}
-                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 cursor-pointer transition-all group">
-                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${task.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-white/20 group-hover:border-white/40'}`}>
-                          {task.status === 'done' && <Check size={11} className="text-white" />}
-                        </div>
-                        <span className={`text-sm font-medium flex-1 ${task.status === 'done' ? 'line-through text-white/30' : 'text-white'}`}>{task.title}</span>
-                        {task.estimatedTime ? <span className="text-[10px] font-mono text-white/30">{task.estimatedTime}m</span> : null}
-                        <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ${task.urgency === 'high' ? 'bg-red-500/20 text-red-400' : task.urgency === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-white/10 text-white/40'}`}>
-                          {task.urgency}
-                        </span>
+            {[
+              ...projects.map(p => ({ label: `${p.title} — ${allTasks.filter(t => t.projectId === p.id && t.status === 'done').length}/${allTasks.filter(t => t.projectId === p.id).length}`, tasks: allTasks.filter(t => t.projectId === p.id), key: p.id })),
+              { label: 'No Project', tasks: allTasks.filter(t => !t.projectId), key: '__none__' }
+            ].filter(g => g.tasks.length > 0).map(group => (
+              <Card key={group.key} title={group.label}>
+                <div className="space-y-1">
+                  {group.tasks.map(task => (
+                    <div key={task.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-all group">
+                      <button
+                        onClick={() => toggleTask(task.id)}
+                        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${task.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-white/20 hover:border-white/50'}`}
+                      >
+                        {task.status === 'done' && <Check size={11} className="text-white" />}
+                      </button>
+                      <button onClick={() => openDetail(task)} className={`text-sm font-medium flex-1 text-left transition-all hover:underline underline-offset-2 ${task.status === 'done' ? 'line-through text-white/30' : 'text-white'}`}>
+                        {task.title}
+                      </button>
+                      {task.notes && <span className="text-[10px] text-white/30 italic hidden group-hover:inline">has notes</span>}
+                      {task.estimatedTime ? <span className="text-[10px] font-mono text-white/30">{task.estimatedTime}m</span> : null}
+                      <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ${task.urgency === 'high' ? 'bg-red-500/20 text-red-400' : task.urgency === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-white/10 text-white/40'}`}>
+                        {task.urgency}
+                      </span>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => openDetail(task)} className="p-1.5 hover:bg-white/10 rounded-lg transition-all" title="Edit">
+                          <Save size={12} className="text-white/40 hover:text-white" />
+                        </button>
+                        <button onClick={() => deleteTask(task.id)} className="p-1.5 hover:bg-red-500/20 rounded-lg transition-all" title="Delete">
+                          <Trash2 size={12} className="text-white/40 hover:text-red-400" />
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                </Card>
-              );
-            })}
-            {(() => {
-              const ungrouped = allTasks.filter(t => !t.projectId);
-              if (ungrouped.length === 0) return null;
-              return (
-                <Card title="No Project">
-                  <div className="space-y-1">
-                    {ungrouped.map(task => (
-                      <div key={task.id} onClick={() => toggleTask(task.id)}
-                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 cursor-pointer transition-all group">
-                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${task.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-white/20 group-hover:border-white/40'}`}>
-                          {task.status === 'done' && <Check size={11} className="text-white" />}
-                        </div>
-                        <span className={`text-sm font-medium flex-1 ${task.status === 'done' ? 'line-through text-white/30' : 'text-white'}`}>{task.title}</span>
-                        {task.estimatedTime ? <span className="text-[10px] font-mono text-white/30">{task.estimatedTime}m</span> : null}
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              );
-            })()}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            ))}
           </motion.div>
         )}
 
@@ -1628,6 +1635,113 @@ const WorkMode = ({
                 )}
               </div>
             </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ---- TASK DETAIL MODAL ---- */}
+      <AnimatePresence>
+        {detailTask && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6"
+            onClick={(e) => { if (e.target === e.currentTarget) saveDetail(); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-lg bg-zinc-900/95 border border-white/10 rounded-3xl p-8 space-y-6 shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <input
+                  autoFocus
+                  type="text"
+                  value={detailTask.title}
+                  onChange={e => setDetailTask({ ...detailTask, title: e.target.value })}
+                  className="text-2xl font-bold bg-transparent text-white outline-none flex-1 border-b border-white/10 pb-1 focus:border-white/40 transition-colors"
+                  placeholder="Task title"
+                />
+                <button onClick={() => setDetailTask(null)} className="text-white/40 hover:text-white mt-1 flex-shrink-0"><X size={20} /></button>
+              </div>
+
+              <textarea
+                value={detailTask.notes || ''}
+                onChange={e => setDetailTask({ ...detailTask, notes: e.target.value })}
+                placeholder="Add notes, context, or details…"
+                rows={4}
+                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/20 resize-none transition-all"
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Urgency</label>
+                  <select
+                    value={detailTask.urgency}
+                    onChange={e => setDetailTask({ ...detailTask, urgency: e.target.value as Task['urgency'] })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20"
+                  >
+                    <option value="low" className="bg-zinc-900">Low</option>
+                    <option value="medium" className="bg-zinc-900">Medium</option>
+                    <option value="high" className="bg-zinc-900">High</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Est. Time (min)</label>
+                  <input
+                    type="number"
+                    value={detailTask.estimatedTime || ''}
+                    onChange={e => setDetailTask({ ...detailTask, estimatedTime: parseInt(e.target.value) || undefined })}
+                    placeholder="30"
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20 placeholder:text-white/30"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Project</label>
+                  <select
+                    value={detailTask.projectId || ''}
+                    onChange={e => setDetailTask({ ...detailTask, projectId: e.target.value || undefined })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20"
+                  >
+                    <option value="" className="bg-zinc-900">No Project</option>
+                    {projects.map(p => <option key={p.id} value={p.id} className="bg-zinc-900">{p.title}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-6">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input type="checkbox" checked={detailTask.isStrategic} onChange={e => setDetailTask({ ...detailTask, isStrategic: e.target.checked })} className="w-4 h-4 rounded bg-white/10 border-white/20 accent-white" />
+                  <span className="text-xs font-bold text-white/40 group-hover:text-white transition-colors">Strategic</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input type="checkbox" checked={detailTask.isFrog} onChange={e => setDetailTask({ ...detailTask, isFrog: e.target.checked })} className="w-4 h-4 rounded bg-white/10 border-white/20 accent-white" />
+                  <span className="text-xs font-bold text-white/40 group-hover:text-white transition-colors">Frog 🐸</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input type="checkbox" checked={detailTask.status === 'done'} onChange={e => setDetailTask({ ...detailTask, status: e.target.checked ? 'done' : 'todo' })} className="w-4 h-4 rounded bg-white/10 border-white/20 accent-white" />
+                  <span className="text-xs font-bold text-white/40 group-hover:text-white transition-colors">Done</span>
+                </label>
+              </div>
+
+              <div className="flex gap-3 pt-2 border-t border-white/10">
+                <button
+                  onClick={saveDetail}
+                  className="flex-1 py-3 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-xl font-bold text-sm hover:bg-white/30 transition-all"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => deleteTask(detailTask.id)}
+                  className="px-5 py-3 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl font-bold text-sm hover:bg-red-500/20 transition-all flex items-center gap-2"
+                >
+                  <Trash2 size={14} />
+                  Delete
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

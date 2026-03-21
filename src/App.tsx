@@ -323,75 +323,6 @@ const DailyPulse = ({ data }: { data: DailyPulseData }) => {
   );
 };
 
-const CheckInMode = ({ onSave }: { onSave: (energy: number, focus: number) => void }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [energy, setEnergy] = useState(5);
-  const [focus, setFocus] = useState(5);
-
-  const handleSave = () => {
-    onSave(energy, focus);
-    setIsOpen(false);
-  };
-
-  return (
-    <div className="space-y-4">
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full py-4 glass-button rounded-2xl flex items-center justify-center gap-2 text-sm font-bold"
-      >
-        <Zap size={16} />
-        Check-in Mode
-      </button>
-
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <Card>
-              <div className="space-y-6">
-                <div>
-                  <div className="flex justify-between text-[10px] font-bold text-white/40 uppercase mb-3">
-                    <span>Energy Level</span>
-                    <span>{energy}/10</span>
-                  </div>
-                  <input 
-                    type="range" min="1" max="10" 
-                    value={energy} 
-                    onChange={(e) => setEnergy(parseInt(e.target.value))}
-                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between text-[10px] font-bold text-white/40 uppercase mb-3">
-                    <span>Focus Score</span>
-                    <span>{focus}/10</span>
-                  </div>
-                  <input 
-                    type="range" min="1" max="10" 
-                    value={focus} 
-                    onChange={(e) => setFocus(parseInt(e.target.value))}
-                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
-                  />
-                </div>
-                <button 
-                  onClick={handleSave}
-                  className="w-full py-2 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-xl text-xs font-bold hover:bg-white/30 transition-all"
-                >
-                  Save Check-in
-                </button>
-              </div>
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
-
 const CalendarPreview = () => {
   const events = [
     { time: "09:00 AM", title: "Deep Work: App Architecture", type: "work" },
@@ -1137,193 +1068,6 @@ const LifeVision = ({ visionData, onUpdateVision }: { visionData: LifeVisionData
   );
 };
 
-const DailyCheckIn = ({ onComplete }: { onComplete: (tasks: Task[], energy: number, focus: number, notes: string) => void }) => {
-  const [step, setStep] = useState(0);
-  const [energy, setEnergy] = useState(5);
-  const [focus, setFocus] = useState(5);
-  const [notes, setNotes] = useState('');
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskUrgency, setNewTaskUrgency] = useState<'low' | 'medium' | 'high'>('medium');
-  const [isStrategic, setIsStrategic] = useState(false);
-  const [isFrog, setIsFrog] = useState(false);
-
-  const addTask = () => {
-    if (!newTaskTitle.trim()) return;
-    const task: Task = {
-      id: Math.random().toString(36).substr(2, 9),
-      title: newTaskTitle,
-      urgency: newTaskUrgency,
-      isStrategic,
-      isFrog,
-      status: 'todo'
-    };
-    setTasks([...tasks, task]);
-    setNewTaskTitle('');
-    setIsStrategic(false);
-    setIsFrog(false);
-  };
-
-  const steps = [
-    { title: "Energy & Focus", description: "How are you feeling today?" },
-    { title: "Tasks", description: "What's on your mind?" },
-    { title: "Additional Info", description: "Anything else relevant?" }
-  ];
-
-  return (
-    <div className="max-w-2xl mx-auto py-12">
-      <div className="mb-12">
-        <h2 className="text-3xl font-bold tracking-tight mb-2 text-white">{steps[step].title}</h2>
-        <p className="text-white/40">{steps[step].description}</p>
-      </div>
-
-      <AnimatePresence mode="wait">
-        {step === 0 && (
-          <motion.div 
-            key="step0"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-12"
-          >
-            <div className="space-y-6">
-              <label className="text-sm font-bold uppercase tracking-widest text-white/40">Energy Level ({energy})</label>
-              <input 
-                type="range" min="1" max="10" value={energy} 
-                onChange={(e) => setEnergy(parseInt(e.target.value))}
-                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
-              />
-              <div className="flex justify-between text-[10px] font-bold text-white/40">
-                <span>DRAINED</span>
-                <span>VIBRANT</span>
-              </div>
-            </div>
-            <div className="space-y-6">
-              <label className="text-sm font-bold uppercase tracking-widest text-white/40">Focus Level ({focus})</label>
-              <input 
-                type="range" min="1" max="10" value={focus} 
-                onChange={(e) => setFocus(parseInt(e.target.value))}
-                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
-              />
-              <div className="flex justify-between text-[10px] font-bold text-white/40">
-                <span>SCATTERED</span>
-                <span>LASER-FOCUSED</span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {step === 1 && (
-          <motion.div 
-            key="step1"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-6"
-          >
-            <div className="bg-white/5 p-6 rounded-3xl border border-white/10 shadow-sm space-y-4 backdrop-blur-md">
-              <input 
-                type="text" 
-                placeholder="Add a task..." 
-                value={newTaskTitle}
-                onChange={(e) => setNewTaskTitle(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addTask()}
-                className="w-full bg-white/10 border border-white/20 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30"
-              />
-              <div className="flex flex-wrap gap-4 items-center">
-                <select 
-                  value={newTaskUrgency}
-                  onChange={(e) => setNewTaskUrgency(e.target.value as any)}
-                  className="bg-white/10 border border-white/20 rounded-xl p-2 text-xs font-bold outline-none text-white"
-                >
-                  <option value="low" className="bg-zinc-900">Low Urgency</option>
-                  <option value="medium" className="bg-zinc-900">Medium Urgency</option>
-                  <option value="high" className="bg-zinc-900">High Urgency</option>
-                </select>
-                <label className="flex items-center gap-2 cursor-pointer group">
-                  <input 
-                    type="checkbox" 
-                    checked={isStrategic}
-                    onChange={(e) => setIsStrategic(e.target.checked)}
-                    className="w-4 h-4 rounded border-white/20 text-white bg-white/10 focus:ring-white/20"
-                  />
-                  <span className="text-xs font-bold text-white/40 group-hover:text-white transition-colors">Strategic</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer group">
-                  <input 
-                    type="checkbox" 
-                    checked={isFrog}
-                    onChange={(e) => setIsFrog(e.target.checked)}
-                    className="w-4 h-4 rounded border-white/20 text-white bg-white/10 focus:ring-white/20"
-                  />
-                  <span className="text-xs font-bold text-white/40 group-hover:text-white transition-colors">Frog 🐸</span>
-                </label>
-                <button 
-                  onClick={addTask}
-                  className="ml-auto p-2 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-xl hover:bg-white/30 transition-colors"
-                >
-                  <Plus size={20} />
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-              {tasks.map(task => (
-                <div key={task.id} className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl shadow-sm backdrop-blur-md">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${task.urgency === 'high' ? 'bg-red-500' : task.urgency === 'medium' ? 'bg-amber-500' : 'bg-blue-500'}`} />
-                    <span className="font-medium text-white">{task.title}</span>
-                    {task.isFrog && <span className="text-xs">🐸</span>}
-                    {task.isStrategic && <Zap size={12} className="text-amber-400" />}
-                  </div>
-                  <button onClick={() => setTasks(tasks.filter(t => t.id !== task.id))}>
-                    <Trash2 size={16} className="text-white/20 hover:text-red-500 transition-colors" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {step === 2 && (
-          <motion.div 
-            key="step2"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-6"
-          >
-            <textarea 
-              autoFocus
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Any other relevant information for today..."
-              className="w-full h-48 bg-white/5 border border-white/10 rounded-3xl p-6 text-lg outline-none focus:ring-4 focus:ring-white/5 transition-all resize-none shadow-sm text-white placeholder:text-white/30 backdrop-blur-md"
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="mt-12 flex justify-between">
-        <button 
-          onClick={() => setStep(step - 1)}
-          disabled={step === 0}
-          className="px-6 py-3 text-white/40 font-bold hover:text-white transition-all disabled:opacity-0"
-        >
-          Back
-        </button>
-        <button 
-          onClick={() => step < 2 ? setStep(step + 1) : onComplete(tasks, energy, focus, notes)}
-          className="px-12 py-4 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-2xl font-bold hover:bg-white/30 transition-all shadow-xl shadow-black/20 flex items-center gap-2"
-        >
-          {step === 2 ? 'Complete Check-in' : 'Next'}
-          <ChevronRight size={20} />
-        </button>
-      </div>
-    </div>
-  );
-};
-
 const TaskDatabaseTab = ({ 
   allTasks, 
   projects, 
@@ -1516,16 +1260,14 @@ const WorkMode = ({
   projects,
   schedule, 
   onUpdateSchedule,
-  onUpdateTasks,
-  onStartCheckIn
-}: { 
-  tasks: Task[], 
+  onUpdateTasks
+}: {
+  tasks: Task[],
   allTasks: Task[],
   projects: Project[],
   schedule: DailySchedule | null, 
   onUpdateSchedule: (s: DailySchedule) => void,
-  onUpdateTasks: (t: Task[]) => void,
-  onStartCheckIn: () => void
+  onUpdateTasks: (t: Task[]) => void
 }) => {
   const [mode, setMode] = useState<'overview' | 'pomodoro' | 'wheel' | 'bingo' | 'task-database'>('overview');
   const [activeBlock, setActiveBlock] = useState<TimeBlock | null>(null);
@@ -1616,14 +1358,7 @@ const WorkMode = ({
           <Zap className="text-white/40" size={40} />
         </div>
         <h2 className="text-2xl font-bold mb-2 text-white">No Schedule Yet</h2>
-        <p className="text-white/40 max-w-md mb-8">Complete your morning check-in to generate your AI-optimized work schedule.</p>
-        <button 
-          onClick={onStartCheckIn}
-          className="px-8 py-4 glass-button rounded-2xl font-bold flex items-center gap-2"
-        >
-          <Zap size={18} />
-          Start Morning Check-in
-        </button>
+        <p className="text-white/40 max-w-md">Add tasks to get started with your work day.</p>
       </div>
     );
   }
@@ -3426,7 +3161,6 @@ export default function App() {
     { id: 'e4', title: 'Gym Session', date: new Date().toISOString().split('T')[0], startTime: '04:30 PM', endTime: '05:30 PM', type: 'health' }
   ]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
-  const [isCheckInOpen, setIsCheckInOpen] = useState(false);
 
   const handleAddWorkout = (w: Workout) => {
     setWorkouts([...workouts, w]);
@@ -3501,71 +3235,6 @@ export default function App() {
     }
   };
 
-  const handleCheckInSave = (energy: number, focus: number) => {
-    setDailyPulseData({
-      energy,
-      focus,
-      source: 'manual'
-    });
-  };
-
-  const handleCheckInComplete = async (newTasks: Task[], energy: number, focus: number, notes: string) => {
-    // Add new tasks to the centralized task list if they don't exist
-    setAllTasks(prev => {
-      const existingIds = new Set(prev.map(t => t.id));
-      const uniqueNewTasks = newTasks.filter(t => !existingIds.has(t.id));
-      return [...prev, ...uniqueNewTasks];
-    });
-    setTasks(newTasks);
-    setDailyPulseData({ energy, focus, source: 'manual' });
-    setIsCheckInOpen(false);
-
-    // Generate schedule with AI
-    try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        console.error("Gemini API key is not configured.");
-        setActiveTab('work');
-        return;
-      }
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Create a daily schedule for a user with these tasks:
-        ${newTasks.map(t => `- ${t.title} (Urgency: ${t.urgency}, Strategic: ${t.isStrategic}, Frog: ${t.isFrog})`).join('\n')}
-        
-        Energy Level: ${energy}/10
-        Focus Level: ${focus}/10
-        Notes: ${notes}
-        
-        Rules:
-        1. "Frog" tasks (unpleasant but important) MUST be scheduled first thing in the morning.
-        2. "Strategic" tasks should be placed during high energy/focus periods.
-        3. Include breaks and meetings.
-        
-        Return the response as a JSON object with this structure:
-        {
-          "summary": "...",
-          "blocks": [
-            { "id": "...", "startTime": "HH:MM", "endTime": "HH:MM", "label": "...", "type": "focus|meeting|break", "tasks": ["taskId1", "taskId2"] }
-          ]
-        }`,
-        config: {
-          responseMimeType: "application/json"
-        }
-      });
-
-      const text = response.text;
-      if (text) {
-        const data = JSON.parse(text);
-        setSchedule(data);
-      }
-      setActiveTab('work');
-    } catch (error) {
-      console.error("Schedule generation failed:", error);
-      setActiveTab('work');
-    }
-  };
 
   const isSidebarCollapsed = true; // Always collapsed as per user request
 
@@ -3711,9 +3380,6 @@ export default function App() {
                       <Clock />
                       <TimeTracking />
                       <DailyPulse data={dailyPulseData} />
-                      <div className="space-y-4">
-                        <CheckInMode onSave={handleCheckInSave} />
-                      </div>
                       <CalendarPreview />
                     </div>
                   </div>
@@ -3739,9 +3405,8 @@ export default function App() {
                     allTasks={allTasks}
                     projects={projects}
                     schedule={schedule} 
-                    onUpdateSchedule={setSchedule} 
+                    onUpdateSchedule={setSchedule}
                     onUpdateTasks={setAllTasks}
-                    onStartCheckIn={() => setIsCheckInOpen(true)}
                   />
                 </motion.div>
               ) : activeTab === 'projects' ? (
@@ -3844,22 +3509,6 @@ export default function App() {
         <AnimatePresence>
           {isOverwhelmed && (
             <OverwhelmedModal isOpen={isOverwhelmed} onClose={() => setIsOverwhelmed(false)} />
-          )}
-          {isCheckInOpen && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[90] bg-black/40 backdrop-blur-xl flex flex-col items-center justify-center p-6"
-            >
-              <button 
-                onClick={() => setIsCheckInOpen(false)}
-                className="absolute top-8 right-8 p-3 hover:bg-white/10 rounded-full transition-colors border border-white/10"
-              >
-                <X size={24} />
-              </button>
-              <DailyCheckIn onComplete={handleCheckInComplete} />
-            </motion.div>
           )}
         </AnimatePresence>
       </div>

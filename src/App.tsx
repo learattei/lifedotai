@@ -82,10 +82,37 @@ interface Task {
   id: string;
   title: string;
   duration?: number; // minutes
+  estimatedTime?: number; // minutes, for the task database
+  projectId?: string;
   urgency: 'low' | 'medium' | 'high';
   isStrategic: boolean;
   isFrog: boolean;
   status: 'todo' | 'done';
+}
+
+interface Project {
+  id: string;
+  title: string;
+  progress: number;
+  status: 'on-track' | 'at-risk' | 'completed';
+  deadline: string;
+  description: string;
+  tasks: string[]; // task IDs or titles, keeping it flexible for now
+}
+
+interface Note {
+  id: string;
+  title: string;
+  content: string;
+  date: string;
+}
+
+interface KnowledgeTopic {
+  id: string;
+  title: string;
+  notes: Note[];
+  lastUpdated: string;
+  content: string;
 }
 
 interface DailySchedule {
@@ -140,11 +167,11 @@ const Clock = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-6 bg-white/50 backdrop-blur-sm rounded-3xl border border-black/5 shadow-sm">
-      <div className="text-4xl font-mono font-medium tracking-tighter text-zinc-900">
+    <div className="glass-card flex flex-col items-center justify-center p-6 rounded-3xl">
+      <div className="text-4xl font-mono font-bold tracking-tighter text-white">
         {formatTime(time)}
       </div>
-      <div className="text-xs uppercase tracking-widest text-zinc-500 mt-2 font-medium">
+      <div className="text-[10px] uppercase tracking-widest text-white/40 mt-2 font-bold">
         {formatDate(time)}
       </div>
     </div>
@@ -198,16 +225,16 @@ const TimeTracking = () => {
             <select 
               value={project}
               onChange={(e) => setProject(e.target.value)}
-              className="w-full p-3 bg-zinc-50 border border-black/5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
+              className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 transition-all text-white"
             >
-              <option>App Development</option>
-              <option>Life Visioning</option>
-              <option>Health & Fitness</option>
-              <option>Learning</option>
+              <option className="bg-zinc-900">App Development</option>
+              <option className="bg-zinc-900">Life Visioning</option>
+              <option className="bg-zinc-900">Health & Fitness</option>
+              <option className="bg-zinc-900">Learning</option>
             </select>
             <button 
               onClick={() => setIsTracking(true)}
-              className="w-full py-3 bg-zinc-900 text-white rounded-xl flex items-center justify-center gap-2 text-sm font-bold shadow-lg shadow-zinc-200 hover:bg-zinc-800 transition-all"
+              className="w-full py-3 glass-button rounded-xl flex items-center justify-center gap-2 text-sm font-bold shadow-lg"
             >
               <Play size={16} fill="currentColor" />
               Start Tracking
@@ -215,30 +242,30 @@ const TimeTracking = () => {
           </>
         ) : (
           <div className="space-y-4">
-            <div className="flex flex-col items-center justify-center p-4 bg-zinc-50 rounded-2xl border border-black/5">
-              <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1">{project}</p>
-              <p className="text-3xl font-mono font-medium tracking-tighter text-zinc-900">
+            <div className="flex flex-col items-center justify-center p-4 glass-card rounded-2xl">
+              <p className="text-[10px] font-bold text-white/40 uppercase mb-1">{project}</p>
+              <p className="text-3xl font-mono font-bold tracking-tighter text-white">
                 {formatDuration(seconds)}
               </p>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <button 
                 onClick={() => setIsTracking(!isTracking)}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${isTracking ? 'bg-amber-50 border-amber-100 text-amber-600' : 'bg-zinc-900 border-zinc-900 text-white'}`}
+                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${isTracking ? 'bg-amber-500/20 border-amber-500/40 text-amber-400' : 'glass-button'}`}
               >
                 {isTracking ? <Pause size={18} /> : <Play size={18} />}
                 <span className="text-[10px] font-bold uppercase mt-1">{isTracking ? 'Pause' : 'Resume'}</span>
               </button>
               <button 
                 onClick={handleSave}
-                className="flex flex-col items-center justify-center p-3 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-all"
+                className="flex flex-col items-center justify-center p-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 rounded-xl hover:bg-emerald-500/30 transition-all"
               >
                 <Save size={18} />
                 <span className="text-[10px] font-bold uppercase mt-1">Save</span>
               </button>
               <button 
                 onClick={handleDelete}
-                className="flex flex-col items-center justify-center p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl hover:bg-red-100 transition-all"
+                className="flex flex-col items-center justify-center p-3 bg-red-500/20 border border-red-500/40 text-red-400 rounded-xl hover:bg-red-500/30 transition-all"
               >
                 <Trash2 size={18} />
                 <span className="text-[10px] font-bold uppercase mt-1">Delete</span>
@@ -257,36 +284,36 @@ const DailyPulse = ({ data }: { data: DailyPulseData }) => {
       <div className="space-y-6">
         {data.source ? (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase">
+            <div className="flex items-center gap-2 text-[10px] font-bold text-white/40 uppercase">
               {data.source === 'manual' ? <Zap size={12} /> : <Watch size={12} />}
               <span>Source: {data.source === 'manual' ? 'Manual Check-in' : 'Fitness Watch'}</span>
             </div>
             <div>
-              <div className="flex justify-between text-xs font-bold text-zinc-400 uppercase mb-2">
+              <div className="flex justify-between text-xs font-bold text-white/40 uppercase mb-2">
                 <span>Energy Level</span>
                 <span>{data.energy * 10}%</span>
               </div>
-              <div className="h-2 bg-zinc-100 rounded-full overflow-hidden">
-                <div className="h-full bg-zinc-900 transition-all duration-500" style={{ width: `${data.energy * 10}%` }}></div>
+              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                <div className="h-full bg-white/80 transition-all duration-500" style={{ width: `${data.energy * 10}%` }}></div>
               </div>
             </div>
             <div>
-              <div className="flex justify-between text-xs font-bold text-zinc-400 uppercase mb-2">
+              <div className="flex justify-between text-xs font-bold text-white/40 uppercase mb-2">
                 <span>Focus Score</span>
                 <span>{data.focus * 10}%</span>
               </div>
-              <div className="h-2 bg-zinc-100 rounded-full overflow-hidden">
-                <div className="h-full bg-zinc-900 transition-all duration-500" style={{ width: `${data.focus * 10}%` }}></div>
+              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                <div className="h-full bg-white/80 transition-all duration-500" style={{ width: `${data.focus * 10}%` }}></div>
               </div>
             </div>
           </div>
         ) : (
-          <div className="p-4 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 flex flex-col items-center justify-center text-center gap-2">
-            <Watch size={24} className="text-zinc-400" />
-            <p className="text-xs text-zinc-500 font-medium">No data available. Check-in or connect a device.</p>
+          <div className="p-4 bg-white/5 rounded-2xl border border-dashed border-white/10 flex flex-col items-center justify-center text-center gap-2">
+            <Watch size={24} className="text-white/40" />
+            <p className="text-xs text-white/60 font-medium">No data available. Check-in or connect a device.</p>
           </div>
         )}
-        <button className="w-full py-3 bg-white border border-black/5 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-zinc-600 hover:bg-zinc-50 transition-all">
+        <button className="w-full py-3 bg-white/10 border border-white/20 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-white hover:bg-white/20 transition-all">
           <Activity size={16} />
           Connect Fitness Watch
         </button>
@@ -309,7 +336,7 @@ const CheckInMode = ({ onSave }: { onSave: (energy: number, focus: number) => vo
     <div className="space-y-4">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full py-4 bg-zinc-100 hover:bg-zinc-200 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold text-zinc-900 transition-all"
+        className="w-full py-4 glass-button rounded-2xl flex items-center justify-center gap-2 text-sm font-bold"
       >
         <Zap size={16} />
         Check-in Mode
@@ -323,7 +350,7 @@ const CheckInMode = ({ onSave }: { onSave: (energy: number, focus: number) => vo
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <Card className="bg-zinc-900 text-white border-0">
+            <Card>
               <div className="space-y-6">
                 <div>
                   <div className="flex justify-between text-[10px] font-bold text-white/40 uppercase mb-3">
@@ -334,7 +361,7 @@ const CheckInMode = ({ onSave }: { onSave: (energy: number, focus: number) => vo
                     type="range" min="1" max="10" 
                     value={energy} 
                     onChange={(e) => setEnergy(parseInt(e.target.value))}
-                    className="w-full accent-white"
+                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                   />
                 </div>
                 <div>
@@ -346,12 +373,12 @@ const CheckInMode = ({ onSave }: { onSave: (energy: number, focus: number) => vo
                     type="range" min="1" max="10" 
                     value={focus} 
                     onChange={(e) => setFocus(parseInt(e.target.value))}
-                    className="w-full accent-white"
+                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
                   />
                 </div>
                 <button 
                   onClick={handleSave}
-                  className="w-full py-2 bg-white text-zinc-900 rounded-xl text-xs font-bold hover:bg-zinc-100 transition-all"
+                  className="w-full py-2 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-xl text-xs font-bold hover:bg-white/30 transition-all"
                 >
                   Save Check-in
                 </button>
@@ -378,12 +405,12 @@ const CalendarPreview = () => {
         {events.map((event, i) => (
           <div key={i} className="flex gap-4 group">
             <div className="flex flex-col items-center">
-              <div className="w-2 h-2 rounded-full bg-zinc-900 mt-1" />
-              <div className="w-px flex-1 bg-zinc-100 my-1 group-last:hidden" />
+              <div className="w-2 h-2 rounded-full bg-white mt-1" />
+              <div className="w-px flex-1 bg-white/10 my-1 group-last:hidden" />
             </div>
             <div className="flex-1 pb-4">
-              <p className="text-[10px] font-bold text-zinc-400 uppercase">{event.time}</p>
-              <p className="text-sm font-semibold text-zinc-900">{event.title}</p>
+              <p className="text-[10px] font-bold text-white/40 uppercase">{event.time}</p>
+              <p className="text-sm font-semibold text-white">{event.title}</p>
             </div>
           </div>
         ))}
@@ -399,7 +426,12 @@ const RelevantNews = ({ interests }: { interests: string[] }) => {
   const fetchNews = useCallback(async () => {
     try {
       setLoading(true);
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        setSummary("Error: Gemini API key is not configured. Please set it in your environment variables.");
+        return;
+      }
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Research the latest news related to these interests: ${interests.join(', ')}. 
@@ -414,9 +446,13 @@ const RelevantNews = ({ interests }: { interests: string[] }) => {
       });
       
       setSummary(response.text || 'No updates found for today.');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch news:", error);
-      setSummary("Failed to load news updates. Please try again later.");
+      let errorMessage = "Failed to load news updates. Please try again later.";
+      if (error.message?.includes("API key")) {
+        errorMessage = "Invalid API key. Please check your configuration.";
+      }
+      setSummary(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -430,32 +466,32 @@ const RelevantNews = ({ interests }: { interests: string[] }) => {
     <Card title="Relevant News">
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 gap-6">
-          <Loader2 className="animate-spin text-zinc-400" size={32} />
-          <p className="text-xs text-zinc-400 font-medium animate-pulse tracking-widest uppercase">Curating your personal newsletter...</p>
+          <Loader2 className="animate-spin text-white/40" size={32} />
+          <p className="text-xs text-white/40 font-medium animate-pulse tracking-widest uppercase">Curating your personal newsletter...</p>
         </div>
       ) : (
         <div className="space-y-12 py-4">
-          <div className="flex items-center justify-between border-b border-zinc-100 pb-6">
-            <div className="flex items-center gap-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+          <div className="flex items-center justify-between border-b border-white/10 pb-6">
+            <div className="flex items-center gap-3 text-[10px] font-bold text-white/40 uppercase tracking-widest">
               <Newspaper size={16} />
               <span>Daily Briefing • {new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</span>
             </div>
             <button 
               onClick={fetchNews}
-              className="text-[10px] font-bold text-zinc-400 hover:text-zinc-900 uppercase tracking-widest transition-colors bg-zinc-50 px-3 py-1.5 rounded-full border border-black/5"
+              className="text-[10px] font-bold text-white/60 hover:text-white uppercase tracking-widest transition-colors glass-button px-3 py-1.5 rounded-full"
             >
               Refresh
             </button>
           </div>
           
-          <div className="prose prose-zinc prose-sm max-w-none prose-headings:tracking-tight prose-headings:font-bold prose-headings:mt-12 prose-headings:mb-6 prose-p:text-zinc-600 prose-p:leading-relaxed prose-p:mb-6 prose-li:text-zinc-600 prose-li:mb-4">
+          <div className="prose prose-invert prose-sm max-w-none prose-headings:tracking-tight prose-headings:font-bold prose-headings:mt-12 prose-headings:mb-6 prose-p:text-white/70 prose-p:leading-relaxed prose-p:mb-6 prose-li:text-white/70 prose-li:mb-4">
             <div className="markdown-body space-y-8">
               <Markdown>{summary}</Markdown>
             </div>
           </div>
           
-          <div className="pt-12 border-t border-zinc-100">
-            <p className="text-[10px] text-zinc-400 italic text-center tracking-widest uppercase opacity-60">
+          <div className="pt-12 border-t border-white/10">
+            <p className="text-[10px] text-white/40 italic text-center tracking-widest uppercase opacity-60">
               Summarized by lifedotAI based on your selected interests.
             </p>
           </div>
@@ -520,11 +556,11 @@ const OverwhelmedModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () =>
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] bg-white/95 backdrop-blur-xl flex flex-col items-center justify-center text-zinc-900 p-6"
+      className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-xl flex flex-col items-center justify-center text-white p-6"
     >
       <button 
         onClick={onClose}
-        className="absolute top-8 right-8 p-3 hover:bg-zinc-100 rounded-full transition-colors border border-black/5"
+        className="absolute top-8 right-8 p-3 hover:bg-white/10 rounded-full transition-colors border border-white/10"
       >
         <X size={24} />
       </button>
@@ -538,17 +574,17 @@ const OverwhelmedModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () =>
             exit={{ opacity: 0, scale: 1.1 }}
             className="text-center space-y-8"
           >
-            <div className="w-24 h-24 bg-zinc-100 rounded-full flex items-center justify-center mx-auto shadow-inner">
-              <Wind size={40} className="text-zinc-400" />
+            <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mx-auto shadow-inner border border-white/10">
+              <Wind size={40} className="text-white/40" />
             </div>
             <h2 className="text-6xl font-bold tracking-tighter">Take a breath.</h2>
-            <p className="text-zinc-500 max-w-md mx-auto font-medium leading-relaxed">
+            <p className="text-white/40 max-w-md mx-auto font-medium leading-relaxed">
               Let's reset with a 5-second box breathing routine. 
               Find a comfortable position and clear your mind.
             </p>
             <button 
               onClick={startBreathing}
-              className="px-16 py-5 bg-zinc-900 text-white rounded-full font-bold text-lg hover:bg-zinc-800 transition-all shadow-2xl shadow-zinc-200"
+              className="px-16 py-5 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-full font-bold text-lg hover:bg-white/30 transition-all shadow-2xl shadow-black/20"
             >
               Start Reset
             </button>
@@ -567,11 +603,11 @@ const OverwhelmedModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () =>
               {/* Visual Breathing Circle */}
               <motion.div 
                 animate={{ 
-                  scale: (breathPhase === 'Inhale' || breathPhase === 'Hold') ? 1.4 : 1,
-                  opacity: (breathPhase === 'Inhale' || breathPhase === 'Hold') ? 0.15 : 0.05
+                   scale: (breathPhase === 'Inhale' || breathPhase === 'Hold') ? 1.4 : 1,
+                   opacity: (breathPhase === 'Inhale' || breathPhase === 'Hold') ? 0.15 : 0.05
                 }}
                 transition={{ duration: 5, ease: "easeInOut" }}
-                className="absolute inset-0 bg-zinc-900 rounded-full"
+                className="absolute inset-0 bg-white rounded-full"
               />
               <motion.div 
                 animate={{ 
@@ -579,27 +615,27 @@ const OverwhelmedModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () =>
                   borderWidth: (breathPhase === 'Inhale' || breathPhase === 'Hold') ? '2px' : '1px'
                 }}
                 transition={{ duration: 5, ease: "easeInOut" }}
-                className="absolute inset-10 border border-zinc-200 rounded-full"
+                className="absolute inset-10 border border-white/20 rounded-full"
               />
               <div className="z-10 flex flex-col items-center">
                 <span className="text-6xl font-mono font-bold tracking-tighter">{timer}</span>
-                <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400 mt-2">Seconds</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/40 mt-2">Seconds</span>
               </div>
             </div>
 
             <div className="space-y-4">
-              <h3 className="text-4xl font-bold tracking-tight uppercase tracking-[0.25em] text-zinc-900">
+              <h3 className="text-4xl font-bold tracking-tight uppercase tracking-[0.25em] text-white">
                 {breathPhase === 'Rest' ? 'Hold' : breathPhase}
               </h3>
               <div className="flex gap-2 justify-center">
                 {[...Array(totalCycles)].map((_, i) => (
                   <div 
                     key={i} 
-                    className={`w-2 h-2 rounded-full transition-all duration-500 ${i < cycle ? 'bg-zinc-900 w-6' : i === cycle ? 'bg-zinc-400' : 'bg-zinc-100'}`} 
+                    className={`w-2 h-2 rounded-full transition-all duration-500 ${i < cycle ? 'bg-white w-6' : i === cycle ? 'bg-white/40' : 'bg-white/10'}`} 
                   />
                 ))}
               </div>
-              <p className="text-zinc-400 font-bold uppercase text-[10px] tracking-widest">Cycle {cycle + 1} of {totalCycles}</p>
+              <p className="text-white/40 font-bold uppercase text-[10px] tracking-widest">Cycle {cycle + 1} of {totalCycles}</p>
             </div>
           </motion.div>
         )}
@@ -611,21 +647,21 @@ const OverwhelmedModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () =>
             animate={{ opacity: 1, y: 0 }}
             className="text-center space-y-8"
           >
-            <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+            <div className="w-24 h-24 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-emerald-500/20">
               <Sparkles size={40} />
             </div>
             <h2 className="text-5xl font-bold tracking-tighter">Feeling better?</h2>
             <div className="flex gap-4 justify-center">
               <button 
                 onClick={startBreathing}
-                className="px-10 py-4 bg-zinc-100 text-zinc-900 rounded-full font-bold hover:bg-zinc-200 transition-all flex items-center gap-2"
+                className="px-10 py-4 bg-white/10 text-white rounded-full font-bold hover:bg-white/20 transition-all flex items-center gap-2 border border-white/10"
               >
                 <RotateCcw size={20} />
                 Repeat
               </button>
               <button 
                 onClick={onClose}
-                className="px-10 py-4 bg-zinc-900 text-white rounded-full font-bold hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-200"
+                className="px-10 py-4 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-full font-bold hover:bg-white/30 transition-all shadow-xl shadow-black/20"
               >
                 I'm done
               </button>
@@ -712,12 +748,12 @@ const LifeVisionSetup = ({ onComplete }: { onComplete: (data: LifeVisionData) =>
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-6">
         <div className="relative">
-          <Loader2 className="animate-spin text-zinc-900" size={48} />
-          <Sparkles className="absolute -top-2 -right-2 text-amber-500 animate-pulse" size={20} />
+          <Loader2 className="animate-spin text-white" size={48} />
+          <Sparkles className="absolute -top-2 -right-2 text-amber-400 animate-pulse" size={20} />
         </div>
         <div className="text-center">
-          <h2 className="text-2xl font-bold mb-2">Manifesting your vision...</h2>
-          <p className="text-zinc-500">AI is weaving your dreams into a concrete plan.</p>
+          <h2 className="text-2xl font-bold mb-2 text-white">Manifesting your vision...</h2>
+          <p className="text-white/40">AI is weaving your dreams into a concrete plan.</p>
         </div>
       </div>
     );
@@ -727,14 +763,14 @@ const LifeVisionSetup = ({ onComplete }: { onComplete: (data: LifeVisionData) =>
     <div className="max-w-2xl mx-auto py-12">
       <div className="mb-12">
         <div className="flex justify-between items-center mb-4">
-          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Step {step + 1} of {questions.length}</span>
+          <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Step {step + 1} of {questions.length}</span>
           <div className="flex gap-1">
             {questions.map((_, i) => (
-              <div key={i} className={`h-1 w-8 rounded-full transition-colors ${i <= step ? 'bg-zinc-900' : 'bg-zinc-100'}`} />
+              <div key={i} className={`h-1 w-8 rounded-full transition-colors ${i <= step ? 'bg-white' : 'bg-white/10'}`} />
             ))}
           </div>
         </div>
-        <h2 className="text-3xl font-bold tracking-tight">{questions[step]}</h2>
+        <h2 className="text-3xl font-bold tracking-tight text-white">{questions[step]}</h2>
       </div>
 
       <textarea 
@@ -742,14 +778,14 @@ const LifeVisionSetup = ({ onComplete }: { onComplete: (data: LifeVisionData) =>
         value={currentAnswer}
         onChange={(e) => setCurrentAnswer(e.target.value)}
         placeholder="Speak from the heart..."
-        className="w-full h-48 bg-white border border-black/5 rounded-3xl p-6 text-lg outline-none focus:ring-4 focus:ring-zinc-900/5 transition-all resize-none shadow-sm"
+        className="w-full h-48 bg-white/5 border border-white/10 rounded-3xl p-6 text-lg outline-none focus:ring-4 focus:ring-white/5 transition-all resize-none shadow-sm text-white placeholder:text-white/30 backdrop-blur-md"
       />
 
       <div className="mt-8 flex justify-end">
         <button 
           onClick={handleNext}
           disabled={!currentAnswer.trim()}
-          className="px-8 py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          className="px-8 py-4 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-2xl font-bold hover:bg-white/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-xl shadow-black/20"
         >
           {step === questions.length - 1 ? 'Generate Vision' : 'Next Question'}
           <ChevronRight size={20} />
@@ -762,19 +798,19 @@ const LifeVisionSetup = ({ onComplete }: { onComplete: (data: LifeVisionData) =>
 const LifeVision = ({ visionData, onUpdateVision }: { visionData: LifeVisionData | null, onUpdateVision: (data: LifeVisionData) => void }) => {
   const [categories, setCategories] = useState<Category[]>([
     { 
-      id: '1', name: 'Health', icon: Heart, color: 'text-rose-500 bg-rose-50', 
+      id: '1', name: 'Health', icon: Heart, color: 'text-rose-400 bg-white/10', 
       goals: [] 
     },
     { 
-      id: '2', name: 'Family & Friends', icon: Users, color: 'text-blue-500 bg-blue-50', 
+      id: '2', name: 'Family & Friends', icon: Users, color: 'text-blue-400 bg-white/10', 
       goals: [] 
     },
     { 
-      id: '3', name: 'Finance', icon: DollarSign, color: 'text-emerald-500 bg-emerald-50', 
+      id: '3', name: 'Finance', icon: DollarSign, color: 'text-emerald-400 bg-white/10', 
       goals: [] 
     },
     { 
-      id: '4', name: 'Business & Career', icon: Briefcase, color: 'text-amber-500 bg-amber-50', 
+      id: '4', name: 'Business & Career', icon: Briefcase, color: 'text-amber-400 bg-white/10', 
       goals: [] 
     },
   ]);
@@ -800,7 +836,7 @@ const LifeVision = ({ visionData, onUpdateVision }: { visionData: LifeVisionData
       id: Date.now().toString(),
       name: newCategoryName,
       icon: Target,
-      color: 'text-zinc-500 bg-zinc-50',
+      color: 'text-white/60 bg-white/10',
       goals: []
     };
     setCategories([...categories, newCat]);
@@ -844,18 +880,18 @@ const LifeVision = ({ visionData, onUpdateVision }: { visionData: LifeVisionData
   return (
     <div className="space-y-12">
       {/* Vision Paragraph */}
-      <div className="bg-white p-10 rounded-[40px] border border-black/5 shadow-sm relative overflow-hidden group">
-        <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+      <div className="glass-card p-10 rounded-[40px] relative overflow-hidden group">
+        <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity text-white">
           <Sparkles size={120} />
         </div>
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-6">
-            <div className="w-8 h-8 bg-zinc-900 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 glass-button rounded-lg flex items-center justify-center">
               <Sparkles size={16} className="text-white" />
             </div>
-            <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Your Manifested Vision</h2>
+            <h2 className="text-sm font-bold uppercase tracking-widest text-white/40">Your Manifested Vision</h2>
           </div>
-          <p className="text-2xl font-medium text-zinc-800 leading-relaxed italic">
+          <p className="text-2xl font-medium text-white leading-relaxed italic">
             "{visionData.paragraph}"
           </p>
         </div>
@@ -866,19 +902,19 @@ const LifeVision = ({ visionData, onUpdateVision }: { visionData: LifeVisionData
           {selectedCategory && (
             <button 
               onClick={() => setSelectedCategory(null)}
-              className="p-2 hover:bg-white rounded-xl transition-colors border border-black/5"
+              className="p-2 hover:bg-white/10 rounded-xl transition-colors border border-white/10 text-white"
             >
               <ChevronLeft size={20} />
             </button>
           )}
-          <h1 className="text-4xl font-bold tracking-tight text-zinc-900">
+          <h1 className="text-4xl font-bold tracking-tight text-white">
             {selectedCategory ? selectedCategory.name : 'Life Categories'}
           </h1>
         </div>
         {!selectedCategory && (
           <button 
             onClick={() => setIsAddingCategory(true)}
-            className="bg-zinc-900 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-zinc-800 transition-colors shadow-lg shadow-zinc-200"
+            className="bg-white/20 backdrop-blur-md text-white border border-white/30 px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-white/30 transition-colors shadow-lg shadow-black/20"
           >
             <Plus size={18} />
             <span>Add Category</span>
@@ -899,36 +935,36 @@ const LifeVision = ({ visionData, onUpdateVision }: { visionData: LifeVisionData
               <div 
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat)}
-                className="bg-white p-6 rounded-3xl border border-black/5 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+                className="glass-card p-6 rounded-3xl hover:bg-white/20 transition-all cursor-pointer group"
               >
                 <div className="flex items-start justify-between mb-6">
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${cat.color}`}>
                     <cat.icon size={24} />
                   </div>
-                  <ChevronRight size={20} className="text-zinc-300 group-hover:text-zinc-900 transition-colors" />
+                  <ChevronRight size={20} className="text-white/20 group-hover:text-white transition-colors" />
                 </div>
-                <h3 className="text-xl font-bold mb-4">{cat.name}</h3>
+                <h3 className="text-xl font-bold mb-4 text-white">{cat.name}</h3>
                 <div className="space-y-4">
                   <div>
-                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Active Goals</p>
+                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Active Goals</p>
                     <div className="flex flex-wrap gap-2">
                       {cat.goals.length > 0 ? cat.goals.map(g => (
-                        <span key={g.id} className="px-3 py-1 bg-zinc-100 rounded-full text-xs font-medium text-zinc-600">
+                        <span key={g.id} className="px-3 py-1 bg-white/10 rounded-full text-xs font-medium text-white/60">
                           {g.title}
                         </span>
-                      )) : <span className="text-xs text-zinc-400 italic">No goals yet</span>}
+                      )) : <span className="text-xs text-white/20 italic">No goals yet</span>}
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-zinc-50">
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
                     <div>
-                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Milestones</p>
-                      <p className="text-sm font-bold text-zinc-900">
+                      <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1">Milestones</p>
+                      <p className="text-sm font-bold text-white">
                         {cat.goals.reduce((acc, g) => acc + g.milestones.length, 0)} Upcoming
                       </p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Wins</p>
-                      <p className="text-sm font-bold text-emerald-600">
+                      <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1">Wins</p>
+                      <p className="text-sm font-bold text-emerald-400">
                         {cat.goals.reduce((acc, g) => acc + g.wins.length, 0)} Recent
                       </p>
                     </div>
@@ -938,7 +974,7 @@ const LifeVision = ({ visionData, onUpdateVision }: { visionData: LifeVisionData
             ))}
 
             {isAddingCategory && (
-              <div className="bg-zinc-900 p-6 rounded-3xl text-white">
+              <div className="bg-black/40 backdrop-blur-xl p-6 rounded-3xl text-white border border-white/10">
                 <h3 className="text-lg font-bold mb-4">New Category</h3>
                 <input 
                   autoFocus
@@ -946,18 +982,18 @@ const LifeVision = ({ visionData, onUpdateVision }: { visionData: LifeVisionData
                   placeholder="Category Name..." 
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
-                  className="w-full bg-white/10 border border-white/10 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 mb-4"
+                  className="w-full bg-white/10 border border-white/10 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 mb-4 text-white"
                 />
                 <div className="flex gap-2">
                   <button 
                     onClick={addCategory}
-                    className="flex-1 py-2 bg-white text-zinc-900 rounded-xl text-xs font-bold hover:bg-zinc-100 transition-all"
+                    className="flex-1 py-2 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-xl text-xs font-bold hover:bg-white/30 transition-all"
                   >
                     Create
                   </button>
                   <button 
                     onClick={() => setIsAddingCategory(false)}
-                    className="flex-1 py-2 bg-white/10 text-white rounded-xl text-xs font-bold hover:bg-white/20 transition-all"
+                    className="flex-1 py-2 bg-white/10 text-white rounded-xl text-xs font-bold hover:bg-white/20 transition-all border border-white/10"
                   >
                     Cancel
                   </button>
@@ -976,36 +1012,36 @@ const LifeVision = ({ visionData, onUpdateVision }: { visionData: LifeVisionData
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-6">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-bold">Goals</h2>
+                  <h2 className="text-2xl font-bold text-white">Goals</h2>
                   <button 
                     onClick={() => setIsAddingGoal(true)}
-                    className="p-2 bg-zinc-100 hover:bg-zinc-200 rounded-xl transition-colors"
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors border border-white/10 text-white"
                   >
                     <Plus size={20} />
                   </button>
                 </div>
 
                 {isAddingGoal && (
-                  <div className="bg-white p-6 rounded-3xl border border-black/5 shadow-sm">
-                    <h3 className="text-sm font-bold mb-4 uppercase tracking-widest text-zinc-400">New Goal</h3>
+                  <div className="bg-white/5 p-6 rounded-3xl border border-white/10 shadow-sm backdrop-blur-md">
+                    <h3 className="text-sm font-bold mb-4 uppercase tracking-widest text-white/40">New Goal</h3>
                     <input 
                       autoFocus
                       type="text" 
                       placeholder="What do you want to achieve?" 
                       value={newGoalTitle}
                       onChange={(e) => setNewGoalTitle(e.target.value)}
-                      className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10 mb-4"
+                      className="w-full bg-white/10 border border-white/20 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30 mb-4"
                     />
                     <div className="flex gap-2">
                       <button 
                         onClick={() => addGoal(selectedCategory.id)}
-                        className="flex-1 py-2 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-zinc-800 transition-all"
+                        className="flex-1 py-2 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-xl text-xs font-bold hover:bg-white/30 transition-all"
                       >
                         Add Goal
                       </button>
                       <button 
                         onClick={() => setIsAddingGoal(false)}
-                        className="flex-1 py-2 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 transition-all"
+                        className="flex-1 py-2 bg-white/10 text-white/60 rounded-xl text-xs font-bold hover:bg-white/20 transition-all border border-white/10"
                       >
                         Cancel
                       </button>
@@ -1018,50 +1054,50 @@ const LifeVision = ({ visionData, onUpdateVision }: { visionData: LifeVisionData
                     <Card key={goal.id}>
                       <div className="flex items-start justify-between mb-6">
                         <div>
-                          <h3 className="text-xl font-bold text-zinc-900">{goal.title}</h3>
+                          <h3 className="text-xl font-bold text-white">{goal.title}</h3>
                           <div className="flex gap-2 mt-1">
-                            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Active</span>
+                            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Active</span>
                             {goal.timeframe && (
-                              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">• {goal.timeframe} term</span>
+                              <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">• {goal.timeframe} term</span>
                             )}
                           </div>
                         </div>
-                        <button className="p-2 hover:bg-zinc-50 rounded-xl transition-colors">
-                          <Settings size={18} className="text-zinc-400" />
+                        <button className="p-2 hover:bg-white/10 rounded-xl transition-colors text-white/40 hover:text-white">
+                          <Settings size={18} />
                         </button>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
-                          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                          <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3 flex items-center gap-2">
                             <Target size={12} />
                             Upcoming Milestones
                           </p>
                           <div className="space-y-2">
                             {goal.milestones.length > 0 ? goal.milestones.map((m, i) => (
-                              <div key={i} className="flex items-center gap-3 p-3 bg-zinc-50 rounded-xl border border-black/5">
-                                <div className="w-1.5 h-1.5 rounded-full bg-zinc-900" />
-                                <span className="text-sm font-medium">{m}</span>
+                              <div key={i} className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10">
+                                <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                <span className="text-sm font-medium text-white/80">{m}</span>
                               </div>
-                            )) : <p className="text-xs text-zinc-400 italic">No milestones defined</p>}
-                            <button className="w-full py-2 border border-dashed border-zinc-200 rounded-xl text-[10px] font-bold text-zinc-400 uppercase hover:border-zinc-400 hover:text-zinc-600 transition-all">
+                            )) : <p className="text-xs text-white/20 italic">No milestones defined</p>}
+                            <button className="w-full py-2 border border-dashed border-white/20 rounded-xl text-[10px] font-bold text-white/40 uppercase hover:border-white/40 hover:text-white/60 transition-all">
                               + Add Milestone
                             </button>
                           </div>
                         </div>
                         <div>
-                          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                          <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3 flex items-center gap-2">
                             <Trophy size={12} />
                             Recent Wins
                           </p>
                           <div className="space-y-2">
                             {goal.wins.length > 0 ? goal.wins.map((w, i) => (
-                              <div key={i} className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                              <div key={i} className="flex items-center gap-3 p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                <span className="text-sm font-medium text-emerald-900">{w}</span>
+                                <span className="text-sm font-medium text-emerald-400">{w}</span>
                               </div>
-                            )) : <p className="text-xs text-zinc-400 italic">No wins yet</p>}
-                            <button className="w-full py-2 border border-dashed border-emerald-200 rounded-xl text-[10px] font-bold text-emerald-400 uppercase hover:border-emerald-400 hover:text-emerald-600 transition-all">
+                            )) : <p className="text-xs text-white/20 italic">No wins yet</p>}
+                            <button className="w-full py-2 border border-dashed border-emerald-500/20 rounded-xl text-[10px] font-bold text-emerald-400 uppercase hover:border-emerald-500/40 hover:text-emerald-500 transition-all">
                               + Log a Win
                             </button>
                           </div>
@@ -1076,17 +1112,17 @@ const LifeVision = ({ visionData, onUpdateVision }: { visionData: LifeVisionData
                 <Card title="Category Stats">
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-zinc-500 font-medium">Total Goals</span>
-                      <span className="text-lg font-bold">{selectedCategory.goals.length}</span>
+                      <span className="text-sm text-white/60 font-medium">Total Goals</span>
+                      <span className="text-lg font-bold text-white">{selectedCategory.goals.length}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-zinc-500 font-medium">Completed</span>
-                      <span className="text-lg font-bold text-emerald-600">0</span>
+                      <span className="text-sm text-white/60 font-medium">Completed</span>
+                      <span className="text-lg font-bold text-emerald-400">0</span>
                     </div>
-                    <div className="pt-4 border-t border-zinc-50">
-                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Category Focus</p>
-                      <div className="h-2 bg-zinc-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-zinc-900 w-2/3"></div>
+                    <div className="pt-4 border-t border-white/10">
+                      <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Category Focus</p>
+                      <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full bg-white/80 w-2/3"></div>
                       </div>
                     </div>
                   </div>
@@ -1136,8 +1172,8 @@ const DailyCheckIn = ({ onComplete }: { onComplete: (tasks: Task[], energy: numb
   return (
     <div className="max-w-2xl mx-auto py-12">
       <div className="mb-12">
-        <h2 className="text-3xl font-bold tracking-tight mb-2">{steps[step].title}</h2>
-        <p className="text-zinc-500">{steps[step].description}</p>
+        <h2 className="text-3xl font-bold tracking-tight mb-2 text-white">{steps[step].title}</h2>
+        <p className="text-white/40">{steps[step].description}</p>
       </div>
 
       <AnimatePresence mode="wait">
@@ -1150,25 +1186,25 @@ const DailyCheckIn = ({ onComplete }: { onComplete: (tasks: Task[], energy: numb
             className="space-y-12"
           >
             <div className="space-y-6">
-              <label className="text-sm font-bold uppercase tracking-widest text-zinc-400">Energy Level ({energy})</label>
+              <label className="text-sm font-bold uppercase tracking-widest text-white/40">Energy Level ({energy})</label>
               <input 
                 type="range" min="1" max="10" value={energy} 
                 onChange={(e) => setEnergy(parseInt(e.target.value))}
-                className="w-full h-2 bg-zinc-100 rounded-lg appearance-none cursor-pointer accent-zinc-900"
+                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
               />
-              <div className="flex justify-between text-[10px] font-bold text-zinc-400">
+              <div className="flex justify-between text-[10px] font-bold text-white/40">
                 <span>DRAINED</span>
                 <span>VIBRANT</span>
               </div>
             </div>
             <div className="space-y-6">
-              <label className="text-sm font-bold uppercase tracking-widest text-zinc-400">Focus Level ({focus})</label>
+              <label className="text-sm font-bold uppercase tracking-widest text-white/40">Focus Level ({focus})</label>
               <input 
                 type="range" min="1" max="10" value={focus} 
                 onChange={(e) => setFocus(parseInt(e.target.value))}
-                className="w-full h-2 bg-zinc-100 rounded-lg appearance-none cursor-pointer accent-zinc-900"
+                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
               />
-              <div className="flex justify-between text-[10px] font-bold text-zinc-400">
+              <div className="flex justify-between text-[10px] font-bold text-white/40">
                 <span>SCATTERED</span>
                 <span>LASER-FOCUSED</span>
               </div>
@@ -1184,46 +1220,46 @@ const DailyCheckIn = ({ onComplete }: { onComplete: (tasks: Task[], energy: numb
             exit={{ opacity: 0, x: -20 }}
             className="space-y-6"
           >
-            <div className="bg-white p-6 rounded-3xl border border-black/5 shadow-sm space-y-4">
+            <div className="bg-white/5 p-6 rounded-3xl border border-white/10 shadow-sm space-y-4 backdrop-blur-md">
               <input 
                 type="text" 
                 placeholder="Add a task..." 
                 value={newTaskTitle}
                 onChange={(e) => setNewTaskTitle(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addTask()}
-                className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                className="w-full bg-white/10 border border-white/20 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30"
               />
               <div className="flex flex-wrap gap-4 items-center">
                 <select 
                   value={newTaskUrgency}
                   onChange={(e) => setNewTaskUrgency(e.target.value as any)}
-                  className="bg-zinc-50 border border-black/5 rounded-xl p-2 text-xs font-bold outline-none"
+                  className="bg-white/10 border border-white/20 rounded-xl p-2 text-xs font-bold outline-none text-white"
                 >
-                  <option value="low">Low Urgency</option>
-                  <option value="medium">Medium Urgency</option>
-                  <option value="high">High Urgency</option>
+                  <option value="low" className="bg-zinc-900">Low Urgency</option>
+                  <option value="medium" className="bg-zinc-900">Medium Urgency</option>
+                  <option value="high" className="bg-zinc-900">High Urgency</option>
                 </select>
                 <label className="flex items-center gap-2 cursor-pointer group">
                   <input 
                     type="checkbox" 
                     checked={isStrategic}
                     onChange={(e) => setIsStrategic(e.target.checked)}
-                    className="w-4 h-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                    className="w-4 h-4 rounded border-white/20 text-white bg-white/10 focus:ring-white/20"
                   />
-                  <span className="text-xs font-bold text-zinc-500 group-hover:text-zinc-900 transition-colors">Strategic</span>
+                  <span className="text-xs font-bold text-white/40 group-hover:text-white transition-colors">Strategic</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer group">
                   <input 
                     type="checkbox" 
                     checked={isFrog}
                     onChange={(e) => setIsFrog(e.target.checked)}
-                    className="w-4 h-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                    className="w-4 h-4 rounded border-white/20 text-white bg-white/10 focus:ring-white/20"
                   />
-                  <span className="text-xs font-bold text-zinc-500 group-hover:text-zinc-900 transition-colors">Frog 🐸</span>
+                  <span className="text-xs font-bold text-white/40 group-hover:text-white transition-colors">Frog 🐸</span>
                 </label>
                 <button 
                   onClick={addTask}
-                  className="ml-auto p-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-colors"
+                  className="ml-auto p-2 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-xl hover:bg-white/30 transition-colors"
                 >
                   <Plus size={20} />
                 </button>
@@ -1232,15 +1268,15 @@ const DailyCheckIn = ({ onComplete }: { onComplete: (tasks: Task[], energy: numb
 
             <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
               {tasks.map(task => (
-                <div key={task.id} className="flex items-center justify-between p-4 bg-white border border-black/5 rounded-2xl shadow-sm">
+                <div key={task.id} className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl shadow-sm backdrop-blur-md">
                   <div className="flex items-center gap-3">
                     <div className={`w-2 h-2 rounded-full ${task.urgency === 'high' ? 'bg-red-500' : task.urgency === 'medium' ? 'bg-amber-500' : 'bg-blue-500'}`} />
-                    <span className="font-medium">{task.title}</span>
+                    <span className="font-medium text-white">{task.title}</span>
                     {task.isFrog && <span className="text-xs">🐸</span>}
-                    {task.isStrategic && <Zap size={12} className="text-amber-500" />}
+                    {task.isStrategic && <Zap size={12} className="text-amber-400" />}
                   </div>
                   <button onClick={() => setTasks(tasks.filter(t => t.id !== task.id))}>
-                    <Trash2 size={16} className="text-zinc-300 hover:text-red-500 transition-colors" />
+                    <Trash2 size={16} className="text-white/20 hover:text-red-500 transition-colors" />
                   </button>
                 </div>
               ))}
@@ -1261,7 +1297,7 @@ const DailyCheckIn = ({ onComplete }: { onComplete: (tasks: Task[], energy: numb
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Any other relevant information for today..."
-              className="w-full h-48 bg-white border border-black/5 rounded-3xl p-6 text-lg outline-none focus:ring-4 focus:ring-zinc-900/5 transition-all resize-none shadow-sm"
+              className="w-full h-48 bg-white/5 border border-white/10 rounded-3xl p-6 text-lg outline-none focus:ring-4 focus:ring-white/5 transition-all resize-none shadow-sm text-white placeholder:text-white/30 backdrop-blur-md"
             />
           </motion.div>
         )}
@@ -1271,13 +1307,13 @@ const DailyCheckIn = ({ onComplete }: { onComplete: (tasks: Task[], energy: numb
         <button 
           onClick={() => setStep(step - 1)}
           disabled={step === 0}
-          className="px-6 py-3 text-zinc-400 font-bold hover:text-zinc-900 transition-all disabled:opacity-0"
+          className="px-6 py-3 text-white/40 font-bold hover:text-white transition-all disabled:opacity-0"
         >
           Back
         </button>
         <button 
           onClick={() => step < 2 ? setStep(step + 1) : onComplete(tasks, energy, focus, notes)}
-          className="px-12 py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-200 flex items-center gap-2"
+          className="px-12 py-4 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-2xl font-bold hover:bg-white/30 transition-all shadow-xl shadow-black/20 flex items-center gap-2"
         >
           {step === 2 ? 'Complete Check-in' : 'Next'}
           <ChevronRight size={20} />
@@ -1287,9 +1323,196 @@ const DailyCheckIn = ({ onComplete }: { onComplete: (tasks: Task[], energy: numb
   );
 };
 
+const TaskDatabaseTab = ({ 
+  allTasks, 
+  projects, 
+  onUpdateTasks 
+}: { 
+  allTasks: Task[], 
+  projects: Project[], 
+  onUpdateTasks: (t: Task[]) => void 
+}) => {
+  const [newTask, setNewTask] = useState({
+    title: '',
+    estimatedTime: 30,
+    projectId: '',
+    urgency: 'medium' as const
+  });
+
+  const handleAddTask = () => {
+    if (!newTask.title) return;
+    const t: Task = {
+      id: Math.random().toString(36).substr(2, 9),
+      title: newTask.title,
+      estimatedTime: newTask.estimatedTime,
+      projectId: newTask.projectId,
+      urgency: newTask.urgency,
+      isStrategic: false,
+      isFrog: false,
+      status: 'todo'
+    };
+    onUpdateTasks([...allTasks, t]);
+    setNewTask({ title: '', estimatedTime: 30, projectId: '', urgency: 'medium' });
+  };
+
+  const deleteTask = (id: string) => {
+    onUpdateTasks(allTasks.filter(t => t.id !== id));
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-6">
+          <Card title="Task Inventory">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="pb-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">Task</th>
+                    <th className="pb-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">Project</th>
+                    <th className="pb-4 text-[10px] font-bold text-white/40 uppercase tracking-widest text-center">Est. Time</th>
+                    <th className="pb-4 text-[10px] font-bold text-white/40 uppercase tracking-widest text-center">Urgency</th>
+                    <th className="pb-4 text-[10px] font-bold text-white/40 uppercase tracking-widest text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {allTasks.map(task => (
+                    <tr key={task.id} className="group hover:bg-white/5 transition-colors">
+                      <td className="py-4 pr-4">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-sm text-white">{task.title}</span>
+                          <span className="text-[10px] text-white/40 uppercase tracking-widest">{task.status}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 pr-4">
+                        <span className="text-xs font-medium text-white/60">
+                          {projects.find(p => p.id === task.projectId)?.title || 'No Project'}
+                        </span>
+                      </td>
+                      <td className="py-4 pr-4 text-center">
+                        <span className="text-xs font-mono text-white/60">{task.estimatedTime || task.duration || 0}m</span>
+                      </td>
+                      <td className="py-4 pr-4 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest ${
+                          task.urgency === 'high' ? 'bg-red-500/20 text-red-400' : 
+                          task.urgency === 'medium' ? 'bg-amber-500/20 text-amber-400' : 
+                          'bg-white/10 text-white/60'
+                        }`}>
+                          {task.urgency}
+                        </span>
+                      </td>
+                      <td className="py-4 text-right">
+                        <button 
+                          onClick={() => deleteTask(task.id)}
+                          className="p-2 text-white/20 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {allTasks.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-white/20 italic text-sm">
+                        Your task database is empty. Add your first task below.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          <Card title="Add New Task">
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 block">Task Title</label>
+                <input 
+                  type="text" 
+                  value={newTask.title}
+                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                  placeholder="What needs to be done?"
+                  className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30 transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 block">Project</label>
+                <select 
+                  value={newTask.projectId}
+                  onChange={(e) => setNewTask({ ...newTask, projectId: e.target.value })}
+                  className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white transition-all"
+                >
+                  <option value="" className="bg-zinc-900">No Project</option>
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id} className="bg-zinc-900">{p.title}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 block">Est. Time (min)</label>
+                  <input 
+                    type="number" 
+                    value={newTask.estimatedTime}
+                    onChange={(e) => setNewTask({ ...newTask, estimatedTime: parseInt(e.target.value) })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 block">Urgency</label>
+                  <select 
+                    value={newTask.urgency}
+                    onChange={(e) => setNewTask({ ...newTask, urgency: e.target.value as any })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white transition-all"
+                  >
+                    <option value="low" className="bg-zinc-900">Low</option>
+                    <option value="medium" className="bg-zinc-900">Medium</option>
+                    <option value="high" className="bg-zinc-900">High</option>
+                  </select>
+                </div>
+              </div>
+              <button 
+                onClick={handleAddTask}
+                disabled={!newTask.title}
+                className="w-full py-3 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-xl font-bold text-sm hover:bg-white/30 transition-all shadow-lg shadow-black/20 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Plus size={16} />
+                Add to Database
+              </button>
+            </div>
+          </Card>
+
+          <Card title="Database Insights">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-white/60 font-medium">Total Tasks</span>
+                <span className="text-lg font-bold text-white">{allTasks.length}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-white/60 font-medium">Total Estimated Time</span>
+                <span className="text-lg font-bold text-white">
+                  {Math.round(allTasks.reduce((acc, t) => acc + (t.estimatedTime || 0), 0) / 60)}h {allTasks.reduce((acc, t) => acc + (t.estimatedTime || 0), 0) % 60}m
+                </span>
+              </div>
+              <div className="pt-4 border-t border-white/10">
+                <p className="text-[10px] text-white/40 italic">
+                  Use the Task Database to capture everything. AI will pull from here during your morning check-in.
+                </p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const WorkMode = ({ 
   tasks, 
   allTasks,
+  projects,
   schedule, 
   onUpdateSchedule,
   onUpdateTasks,
@@ -1297,12 +1520,13 @@ const WorkMode = ({
 }: { 
   tasks: Task[], 
   allTasks: Task[],
+  projects: Project[],
   schedule: DailySchedule | null, 
   onUpdateSchedule: (s: DailySchedule) => void,
   onUpdateTasks: (t: Task[]) => void,
   onStartCheckIn: () => void
 }) => {
-  const [mode, setMode] = useState<'overview' | 'pomodoro' | 'wheel' | 'bingo'>('overview');
+  const [mode, setMode] = useState<'overview' | 'pomodoro' | 'wheel' | 'bingo' | 'task-database'>('overview');
   const [activeBlock, setActiveBlock] = useState<TimeBlock | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -1342,7 +1566,12 @@ const WorkMode = ({
     setChatInput('');
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        setChatMessages([...newMessages, { role: 'ai', text: "Error: Gemini API key is not configured." }]);
+        return;
+      }
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `The user wants to modify their schedule or tasks. 
@@ -1363,8 +1592,9 @@ const WorkMode = ({
         }
       }
       setChatMessages([...newMessages, { role: 'ai', text: text.replace(/<SCHEDULE>.*?<\/SCHEDULE>/s, '').trim() }]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Chat failed:", error);
+      setChatMessages([...newMessages, { role: 'ai', text: "Sorry, I encountered an error. Please try again." }]);
     }
   };
 
@@ -1381,14 +1611,14 @@ const WorkMode = ({
   if (!schedule) {
     return (
       <div className="flex flex-col items-center justify-center py-40 text-center">
-        <div className="w-20 h-20 bg-zinc-100 rounded-3xl flex items-center justify-center mb-6">
-          <Zap className="text-zinc-400" size={40} />
+        <div className="w-20 h-20 glass-card rounded-3xl flex items-center justify-center mb-6">
+          <Zap className="text-white/40" size={40} />
         </div>
-        <h2 className="text-2xl font-bold mb-2">No Schedule Yet</h2>
-        <p className="text-zinc-500 max-w-md mb-8">Complete your morning check-in to generate your AI-optimized work schedule.</p>
+        <h2 className="text-2xl font-bold mb-2 text-white">No Schedule Yet</h2>
+        <p className="text-white/40 max-w-md mb-8">Complete your morning check-in to generate your AI-optimized work schedule.</p>
         <button 
           onClick={onStartCheckIn}
-          className="px-8 py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-200 flex items-center gap-2"
+          className="px-8 py-4 glass-button rounded-2xl font-bold flex items-center gap-2"
         >
           <Zap size={18} />
           Start Morning Check-in
@@ -1400,31 +1630,37 @@ const WorkMode = ({
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-4xl font-bold tracking-tight text-zinc-900">Work Mode</h1>
-        <div className="flex gap-2 bg-white p-1 rounded-2xl border border-black/5 shadow-sm">
+        <h1 className="text-4xl font-bold tracking-tight text-white">Work Mode</h1>
+        <div className="flex gap-2 bg-white/10 p-1 rounded-2xl border border-white/20 shadow-sm backdrop-blur-md">
           <button 
             onClick={() => setMode('overview')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${mode === 'overview' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-400 hover:text-zinc-900'}`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${mode === 'overview' ? 'glass-button shadow-md' : 'text-white/40 hover:text-white'}`}
           >
             Overview
           </button>
           <button 
             onClick={() => setMode('pomodoro')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${mode === 'pomodoro' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-400 hover:text-zinc-900'}`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${mode === 'pomodoro' ? 'glass-button shadow-md' : 'text-white/40 hover:text-white'}`}
           >
             Pomodoro
           </button>
           <button 
             onClick={() => setMode('wheel')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${mode === 'wheel' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-400 hover:text-zinc-900'}`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${mode === 'wheel' ? 'glass-button shadow-md' : 'text-white/40 hover:text-white'}`}
           >
             Spinny Wheel
           </button>
           <button 
             onClick={() => setMode('bingo')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${mode === 'bingo' ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-400 hover:text-zinc-900'}`}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${mode === 'bingo' ? 'glass-button shadow-md' : 'text-white/40 hover:text-white'}`}
           >
             Bingo
+          </button>
+          <button 
+            onClick={() => setMode('task-database')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${mode === 'task-database' ? 'glass-button shadow-md' : 'text-white/40 hover:text-white'}`}
+          >
+            Task Database
           </button>
         </div>
       </div>
@@ -1445,18 +1681,18 @@ const WorkMode = ({
                     <div 
                       key={block.id}
                       onClick={() => setActiveBlock(block)}
-                      className={`p-4 rounded-2xl border transition-all cursor-pointer ${activeBlock?.id === block.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white border-black/5 hover:bg-zinc-50'}`}
+                      className={`p-4 rounded-2xl border transition-all cursor-pointer ${activeBlock?.id === block.id ? 'glass-button' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white'}`}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-3">
-                          <span className={`text-[10px] font-bold uppercase tracking-widest ${activeBlock?.id === block.id ? 'text-white/60' : 'text-zinc-400'}`}>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest ${activeBlock?.id === block.id ? 'text-white/80' : 'text-white/40'}`}>
                             {block.startTime} - {block.endTime}
                           </span>
-                          <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest ${block.type === 'focus' ? 'bg-amber-100 text-amber-600' : block.type === 'meeting' ? 'bg-blue-100 text-blue-600' : 'bg-zinc-100 text-zinc-600'}`}>
+                          <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest ${block.type === 'focus' ? 'bg-amber-500/20 text-amber-400' : block.type === 'meeting' ? 'bg-blue-500/20 text-blue-400' : 'bg-white/10 text-white/60'}`}>
                             {block.type}
                           </span>
                         </div>
-                        <ChevronRight size={16} className={activeBlock?.id === block.id ? 'text-white/40' : 'text-zinc-300'} />
+                        <ChevronRight size={16} className={activeBlock?.id === block.id ? 'text-white/60' : 'text-white/20'} />
                       </div>
                       <h4 className="font-bold">{block.label}</h4>
                       {activeBlock?.id === block.id && (
@@ -1486,7 +1722,7 @@ const WorkMode = ({
                                   <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${task?.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-white/20 hover:border-white/40'}`}>
                                     {task?.status === 'done' && <CheckSquare size={12} className="text-white" />}
                                   </div>
-                                  <span className={task?.status === 'done' ? 'line-through text-white/40' : ''}>
+                                  <span className={task?.status === 'done' ? 'line-through text-white/40' : 'text-white/80'}>
                                     {task?.title || taskId}
                                   </span>
                                 </div>
@@ -1503,21 +1739,21 @@ const WorkMode = ({
                           {isAddTaskOpen && (
                             <div className="mt-4 p-4 bg-white/5 rounded-2xl border border-white/10 space-y-4" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-between">
-                                <h5 className="text-xs font-bold uppercase tracking-widest">Select Task</h5>
-                                <button onClick={() => setIsAddTaskOpen(false)}><X size={14} /></button>
+                                <h5 className="text-xs font-bold uppercase tracking-widest text-white/60">Select Task</h5>
+                                <button onClick={() => setIsAddTaskOpen(false)} className="text-white/40 hover:text-white"><X size={14} /></button>
                               </div>
                               <div className="max-h-40 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                                 {allTasks.filter(t => !block.tasks.includes(t.id)).map(task => (
                                   <div 
                                     key={task.id}
                                     onClick={() => addTaskToBlock(block.id, task.id)}
-                                    className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs cursor-pointer transition-all border border-transparent hover:border-white/10"
+                                    className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs cursor-pointer transition-all border border-transparent hover:border-white/10 text-white/80"
                                   >
                                     {task.title}
                                   </div>
                                 ))}
                                 <button 
-                                  className="w-full p-2 border border-dashed border-white/20 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-white/5 transition-all"
+                                  className="w-full p-2 border border-dashed border-white/20 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-white/5 transition-all text-white/40 hover:text-white/60"
                                   onClick={() => {
                                     const newTitle = prompt("Enter new task title:");
                                     if (newTitle) {
@@ -1543,7 +1779,7 @@ const WorkMode = ({
                       )}
                     </div>
                   )) : (
-                    <p className="text-xs text-zinc-400 italic text-center py-8">No tasks scheduled for today.</p>
+                    <p className="text-xs text-white/40 italic text-center py-8">No tasks scheduled for today.</p>
                   )}
                 </div>
               </Card>
@@ -1554,11 +1790,11 @@ const WorkMode = ({
                 <div className="flex flex-col h-[400px]">
                   <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
                     {chatMessages.length === 0 && (
-                      <p className="text-xs text-zinc-400 italic text-center py-8">Ask me to reshuffle your schedule or change time blocks.</p>
+                      <p className="text-xs text-white/40 italic text-center py-8">Ask me to reshuffle your schedule or change time blocks.</p>
                     )}
                     {chatMessages.map((msg, i) => (
                       <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-800'}`}>
+                        <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-white/20 backdrop-blur-md text-white border border-white/30' : 'bg-white/10 text-white border border-white/10'}`}>
                           {msg.text}
                         </div>
                       </div>
@@ -1571,11 +1807,11 @@ const WorkMode = ({
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleChat()}
-                      className="flex-1 bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                      className="flex-1 bg-white/10 border border-white/20 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30 transition-all"
                     />
                     <button 
                       onClick={handleChat}
-                      className="p-3 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-colors"
+                      className="p-3 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-xl hover:bg-white/30 transition-all shadow-lg shadow-black/20"
                     >
                       <MessageSquare size={18} />
                     </button>
@@ -1595,35 +1831,35 @@ const WorkMode = ({
             className="flex flex-col items-center justify-center py-12 space-y-12"
           >
             <div className="relative w-72 h-72 flex items-center justify-center">
-              <div className="absolute inset-0 border-8 border-zinc-100 rounded-full" />
-              <div className="absolute inset-0 border-8 border-zinc-900 rounded-full border-t-transparent animate-spin-slow" />
+              <div className="absolute inset-0 border-8 border-white/10 rounded-full" />
+              <div className="absolute inset-0 border-8 border-white rounded-full border-t-transparent animate-spin-slow" />
               <div className="text-center">
-                <span className="text-7xl font-mono font-bold tracking-tighter">25:00</span>
-                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400 mt-2">Focus Time</p>
+                <span className="text-7xl font-mono font-bold tracking-tighter text-white">25:00</span>
+                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/40 mt-2">Focus Time</p>
               </div>
             </div>
 
             <div className="flex gap-4">
-              <button className="px-12 py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-200">
+              <button className="px-12 py-4 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-2xl font-bold hover:bg-white/30 transition-all shadow-xl shadow-black/20">
                 Start Timer
               </button>
-              <button className="px-8 py-4 bg-zinc-100 text-zinc-600 rounded-2xl font-bold hover:bg-zinc-200 transition-all">
+              <button className="px-8 py-4 bg-white/10 text-white rounded-2xl font-bold hover:bg-white/20 transition-all border border-white/10">
                 Reset
               </button>
             </div>
 
             <div className="max-w-md w-full space-y-4">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400 text-center">Tasks for this block</h3>
+              <h3 className="text-sm font-bold uppercase tracking-widest text-white/40 text-center">Tasks for this block</h3>
               {(activeBlock ? activeBlock.tasks.map(id => allTasks.find(t => t.id === id)).filter(Boolean) : allTasks.slice(0, 3)).map(task => (
                 <div 
                   key={task!.id} 
                   onClick={() => toggleTaskStatus(task!.id)}
-                  className="p-4 bg-white border border-black/5 rounded-2xl flex items-center gap-4 shadow-sm cursor-pointer hover:bg-zinc-50 transition-all"
+                  className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-4 shadow-sm cursor-pointer hover:bg-white/10 transition-all"
                 >
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${task!.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-200'}`}>
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${task!.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-white/20'}`}>
                     {task!.status === 'done' && <CheckSquare size={12} className="text-white" />}
                   </div>
-                  <span className={`font-medium ${task!.status === 'done' ? 'line-through text-zinc-400' : ''}`}>{task!.title}</span>
+                  <span className={`font-medium text-white ${task!.status === 'done' ? 'line-through text-white/40' : ''}`}>{task!.title}</span>
                 </div>
               ))}
             </div>
@@ -1638,32 +1874,32 @@ const WorkMode = ({
             exit={{ opacity: 0, rotate: 10 }}
             className="flex flex-col items-center justify-center py-12 space-y-12"
           >
-            <div className={`relative w-80 h-80 rounded-full border-8 border-zinc-900 flex items-center justify-center transition-all duration-[2000ms] ease-out ${isSpinning ? 'rotate-[1080deg]' : ''}`}>
+            <div className={`relative w-80 h-80 rounded-full border-8 border-white/20 flex items-center justify-center transition-all duration-[2000ms] ease-out ${isSpinning ? 'rotate-[1080deg]' : ''} backdrop-blur-md`}>
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-1 h-full bg-zinc-100 absolute" />
-                <div className="h-1 w-full bg-zinc-100 absolute" />
-                <div className="w-1 h-full bg-zinc-100 absolute rotate-45" />
-                <div className="w-1 h-full bg-zinc-100 absolute -rotate-45" />
+                <div className="w-1 h-full bg-white/10 absolute" />
+                <div className="h-1 w-full bg-white/10 absolute" />
+                <div className="w-1 h-full bg-white/10 absolute rotate-45" />
+                <div className="w-1 h-full bg-white/10 absolute -rotate-45" />
               </div>
-              <div className="w-16 h-16 bg-zinc-900 rounded-full z-10 flex items-center justify-center border-4 border-white">
+              <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-full z-10 flex items-center justify-center border-4 border-white/30">
                 <Zap size={24} className="text-white" />
               </div>
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[15px] border-l-transparent border-r-[15px] border-r-transparent border-t-[30px] border-t-zinc-900 z-20" />
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[15px] border-l-transparent border-r-[15px] border-r-transparent border-t-[30px] border-t-white/80 z-20" />
             </div>
 
             <div className="text-center space-y-6">
               {selectedTask ? (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Your Assigned Task</p>
-                  <h3 className="text-3xl font-bold tracking-tight">{selectedTask.title}</h3>
+                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Your Assigned Task</p>
+                  <h3 className="text-3xl font-bold tracking-tight text-white">{selectedTask.title}</h3>
                 </motion.div>
               ) : (
-                <p className="text-zinc-500">Spin the wheel to get a random task assigned.</p>
+                <p className="text-white/60">Spin the wheel to get a random task assigned.</p>
               )}
               <button 
                 onClick={spinWheel}
                 disabled={isSpinning}
-                className="px-16 py-5 bg-zinc-900 text-white rounded-full font-bold text-lg hover:bg-zinc-800 transition-all shadow-2xl shadow-zinc-200 flex items-center gap-3"
+                className="px-16 py-5 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-full font-bold text-lg hover:bg-white/30 transition-all shadow-2xl shadow-black/20 flex items-center gap-3"
               >
                 <RefreshCw size={24} className={isSpinning ? 'animate-spin' : ''} />
                 {isSpinning ? 'Spinning...' : 'Spin the Wheel'}
@@ -1681,17 +1917,17 @@ const WorkMode = ({
             className="flex flex-col items-center justify-center py-12 space-y-8"
           >
             <div className="text-center space-y-2">
-              <h2 className="text-3xl font-bold tracking-tight">Task Bingo</h2>
-              <p className="text-zinc-500">Complete a line to win the morning!</p>
+              <h2 className="text-3xl font-bold tracking-tight text-white">Task Bingo</h2>
+              <p className="text-white/60">Complete a line to win the morning!</p>
             </div>
 
-            <div className="grid grid-cols-5 gap-2 bg-zinc-100 p-2 rounded-3xl border border-black/5">
+            <div className="grid grid-cols-5 gap-2 bg-white/5 p-2 rounded-3xl border border-white/10 backdrop-blur-md">
               {[...Array(25)].map((_, i) => {
                 const task = tasks && tasks.length > 0 ? tasks[i % tasks.length] : null;
                 return (
                   <div 
                     key={i}
-                    className={`w-24 h-24 bg-white rounded-2xl p-2 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-zinc-50 transition-all border border-black/5 ${i === 12 ? 'bg-zinc-900 text-white' : ''}`}
+                    className={`w-24 h-24 rounded-2xl p-2 flex flex-col items-center justify-center text-center cursor-pointer transition-all border border-white/10 ${i === 12 ? 'bg-white/20 backdrop-blur-md text-white border-white/40' : 'bg-white/5 text-white hover:bg-white/10'}`}
                   >
                     {i === 12 ? (
                       <span className="text-[10px] font-bold uppercase tracking-widest">FREE SPACE</span>
@@ -1703,9 +1939,24 @@ const WorkMode = ({
               })}
             </div>
 
-            <button className="px-12 py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all">
+            <button className="px-12 py-4 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-2xl font-bold hover:bg-white/30 transition-all shadow-xl shadow-black/20">
               Shuffle Board
             </button>
+          </motion.div>
+        )}
+
+        {mode === 'task-database' && (
+          <motion.div 
+            key="task-database"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <TaskDatabaseTab 
+              allTasks={allTasks} 
+              projects={projects} 
+              onUpdateTasks={onUpdateTasks} 
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -1713,20 +1964,48 @@ const WorkMode = ({
   );
 };
 
-const ProjectsTab = () => {
-  const [selectedProject, setSelectedProject] = useState<any>(null);
-  const projects = [
-    { id: '1', title: 'lifedotAI MVP', progress: 65, status: 'on-track', deadline: 'Mar 30', description: 'Building the first version of the life management AI.', tasks: ['Implement Work Mode', 'Fix Calendar Alignment', 'Refine News UI'] },
-    { id: '2', title: 'Health Transformation', progress: 40, status: 'at-risk', deadline: 'Apr 15', description: 'Focusing on physical and mental well-being.', tasks: ['Daily 5km run', 'Meditation 10min', 'Meal prep'] },
-    { id: '3', title: 'Financial Freedom Plan', progress: 20, status: 'on-track', deadline: 'Dec 31', description: 'Long-term wealth building and budgeting.', tasks: ['Set up emergency fund', 'Automate savings', 'Review investments'] }
-  ];
+const ProjectsTab = ({ 
+  projects, 
+  onAddProject, 
+  onUpdateProject, 
+  onDeleteProject 
+}: { 
+  projects: Project[], 
+  onAddProject: (p: Project) => void,
+  onUpdateProject: (p: Project) => void,
+  onDeleteProject: (id: string) => void
+}) => {
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [isAddingProject, setIsAddingProject] = useState(false);
+  const [newProject, setNewProject] = useState({
+    title: '',
+    description: '',
+    deadline: '',
+    status: 'on-track' as const
+  });
+
+  const handleAddProject = () => {
+    if (!newProject.title) return;
+    const p: Project = {
+      id: Math.random().toString(36).substr(2, 9),
+      title: newProject.title,
+      description: newProject.description,
+      deadline: newProject.deadline,
+      status: newProject.status,
+      progress: 0,
+      tasks: []
+    };
+    onAddProject(p);
+    setIsAddingProject(false);
+    setNewProject({ title: '', description: '', deadline: '', status: 'on-track' });
+  };
 
   if (selectedProject) {
     return (
       <div className="space-y-8">
         <button 
           onClick={() => setSelectedProject(null)}
-          className="flex items-center gap-2 text-sm font-bold text-zinc-400 hover:text-zinc-900 transition-colors uppercase tracking-widest"
+          className="flex items-center gap-2 text-sm font-bold text-white/40 hover:text-white transition-colors uppercase tracking-widest"
         >
           <ChevronLeft size={16} />
           Back to Projects
@@ -1735,19 +2014,19 @@ const ProjectsTab = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
             <div className="flex flex-col gap-4">
-              <h1 className="text-4xl font-bold tracking-tight text-zinc-900">{selectedProject.title}</h1>
-              <p className="text-zinc-500 font-medium">{selectedProject.description}</p>
+              <h1 className="text-4xl font-bold tracking-tight text-white">{selectedProject.title}</h1>
+              <p className="text-white/60 font-medium">{selectedProject.description}</p>
             </div>
 
             <Card title="Project Tasks">
               <div className="space-y-4">
                 {selectedProject.tasks.map((task: string, i: number) => (
-                  <div key={i} className="flex items-center gap-4 p-4 bg-zinc-50 rounded-2xl border border-black/5">
-                    <div className="w-6 h-6 rounded-full border-2 border-zinc-200" />
-                    <span className="font-medium">{task}</span>
+                  <div key={i} className="flex items-center gap-4 p-4 glass-card rounded-2xl">
+                    <div className="w-6 h-6 rounded-full border-2 border-white/20" />
+                    <span className="font-medium text-white">{task}</span>
                   </div>
                 ))}
-                <button className="w-full py-3 border border-dashed border-zinc-200 rounded-2xl text-xs font-bold text-zinc-400 hover:bg-zinc-50 transition-all uppercase tracking-widest">
+                <button className="w-full py-3 border border-dashed border-white/20 rounded-2xl text-xs font-bold text-white/40 hover:bg-white/10 transition-all uppercase tracking-widest">
                   + Add Task to Project
                 </button>
               </div>
@@ -1758,23 +2037,23 @@ const ProjectsTab = () => {
             <Card title="Project Stats">
               <div className="space-y-6">
                 <div>
-                  <div className="flex justify-between text-[10px] font-bold text-zinc-400 uppercase mb-2">
+                  <div className="flex justify-between text-[10px] font-bold text-white/40 uppercase mb-2">
                     <span>Overall Progress</span>
                     <span>{selectedProject.progress}%</span>
                   </div>
-                  <div className="h-2 bg-zinc-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-zinc-900 transition-all duration-500" style={{ width: `${selectedProject.progress}%` }}></div>
+                  <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-white/80 transition-all duration-500" style={{ width: `${selectedProject.progress}%` }}></div>
                   </div>
                 </div>
-                <div className="p-4 bg-zinc-50 rounded-2xl border border-black/5">
-                  <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1">Status</p>
-                  <p className={`font-bold uppercase tracking-widest text-xs ${selectedProject.status === 'on-track' ? 'text-emerald-600' : 'text-red-600'}`}>
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                  <p className="text-[10px] font-bold text-white/40 uppercase mb-1">Status</p>
+                  <p className={`font-bold uppercase tracking-widest text-xs ${selectedProject.status === 'on-track' ? 'text-emerald-400' : 'text-red-400'}`}>
                     {selectedProject.status.replace('-', ' ')}
                   </p>
                 </div>
-                <div className="p-4 bg-zinc-50 rounded-2xl border border-black/5">
-                  <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1">Deadline</p>
-                  <p className="font-bold text-zinc-900">{selectedProject.deadline}</p>
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                  <p className="text-[10px] font-bold text-white/40 uppercase mb-1">Deadline</p>
+                  <p className="font-bold text-white">{selectedProject.deadline}</p>
                 </div>
               </div>
             </Card>
@@ -1787,40 +2066,97 @@ const ProjectsTab = () => {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-4xl font-bold tracking-tight text-zinc-900">Projects</h1>
-        <button className="bg-zinc-900 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-zinc-800 transition-colors shadow-lg shadow-zinc-200">
+        <h1 className="text-4xl font-bold tracking-tight text-white">Projects</h1>
+        <button 
+          onClick={() => setIsAddingProject(true)}
+          className="bg-white/20 backdrop-blur-md text-white border border-white/30 px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-white/30 transition-colors shadow-lg shadow-black/20"
+        >
           <Plus size={18} />
           <span>New Project</span>
         </button>
       </div>
 
+      <AnimatePresence>
+        {isAddingProject && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
+          >
+            <Card className="max-w-md w-full shadow-2xl border-white/10">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-white">New Project</h2>
+                <button onClick={() => setIsAddingProject(false)} className="text-white/40 hover:text-white"><X size={20} /></button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 block">Project Title</label>
+                  <input 
+                    type="text" 
+                    value={newProject.title}
+                    onChange={(e) => setNewProject({ ...newProject, title: e.target.value })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 block">Description</label>
+                  <textarea 
+                    value={newProject.description}
+                    onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 h-24 resize-none text-white transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 block">Deadline</label>
+                  <input 
+                    type="text" 
+                    value={newProject.deadline}
+                    onChange={(e) => setNewProject({ ...newProject, deadline: e.target.value })}
+                    placeholder="e.g. Mar 30"
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30 transition-all"
+                  />
+                </div>
+                <button 
+                  onClick={handleAddProject}
+                  disabled={!newProject.title}
+                  className="w-full py-3 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-xl font-bold text-sm hover:bg-white/30 transition-all shadow-lg shadow-black/20 disabled:opacity-50"
+                >
+                  Create Project
+                </button>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {projects.map(project => (
           <Card 
             key={project.id} 
-            className="hover:shadow-md transition-all cursor-pointer group"
+            className="hover:shadow-md transition-all cursor-pointer group border-white/10"
           >
             <div onClick={() => setSelectedProject(project)}>
               <div className="flex justify-between items-start mb-6">
-                <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center group-hover:bg-zinc-900 group-hover:text-white transition-all">
+                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center group-hover:bg-white/20 group-hover:text-white transition-all text-white border border-transparent group-hover:border-white/30">
                   <Briefcase size={20} />
                 </div>
-                <span className={`px-2 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest ${project.status === 'on-track' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
+                <span className={`px-2 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest ${project.status === 'on-track' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
                   {project.status.replace('-', ' ')}
                 </span>
               </div>
-              <h3 className="text-xl font-bold mb-2">{project.title}</h3>
-              <p className="text-xs text-zinc-400 font-medium mb-6 flex items-center gap-1">
+              <h3 className="text-xl font-bold mb-2 text-white">{project.title}</h3>
+              <p className="text-xs text-white/40 font-medium mb-6 flex items-center gap-1">
                 <Calendar size={12} />
                 Deadline: {project.deadline}
               </p>
               <div className="space-y-2">
-                <div className="flex justify-between text-[10px] font-bold text-zinc-400 uppercase">
+                <div className="flex justify-between text-[10px] font-bold text-white/40 uppercase">
                   <span>Progress</span>
                   <span>{project.progress}%</span>
                 </div>
-                <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-zinc-900 transition-all duration-500" style={{ width: `${project.progress}%` }}></div>
+                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-white/80 transition-all duration-500" style={{ width: `${project.progress}%` }}></div>
                 </div>
               </div>
             </div>
@@ -1939,36 +2275,36 @@ const CalendarTab = ({
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h1 className="text-4xl font-bold tracking-tight text-zinc-900">Calendar</h1>
-          <div className="flex gap-2 bg-white p-1 rounded-xl border border-black/5 shadow-sm">
+          <h1 className="text-4xl font-bold tracking-tight text-white">Calendar</h1>
+          <div className="flex gap-2 bg-white/10 p-1 rounded-xl border border-white/20 shadow-sm backdrop-blur-md">
             <button onClick={() => {
               const d = new Date(currentDate);
               d.setDate(d.getDate() - 7);
               setCurrentDate(d);
-            }} className="p-2 hover:bg-zinc-50 rounded-lg transition-colors">
+            }} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white">
               <ChevronLeft size={16} />
             </button>
             <button onClick={() => {
               const d = new Date(currentDate);
               d.setDate(d.getDate() + 7);
               setCurrentDate(d);
-            }} className="p-2 hover:bg-zinc-50 rounded-lg transition-colors">
+            }} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white">
               <ChevronRight size={16} />
             </button>
           </div>
-          <span className="text-sm font-bold text-zinc-400 uppercase tracking-widest">
+          <span className="text-sm font-bold text-white/40 uppercase tracking-widest">
             {currentDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
           </span>
         </div>
         <div className="flex gap-4">
           <button 
             onClick={() => setIsAddModalOpen(true)}
-            className="bg-zinc-900 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-zinc-800 transition-colors shadow-lg shadow-zinc-200"
+            className="bg-white/20 backdrop-blur-md text-white border border-white/30 px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-white/30 transition-colors shadow-lg shadow-black/20"
           >
             <Plus size={18} />
             <span>Add Event</span>
           </button>
-          <button className="bg-white text-zinc-600 border border-black/5 px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-zinc-50 transition-colors">
+          <button className="bg-white/10 text-white border border-white/20 px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-white/20 transition-colors">
             <Calendar size={18} />
             <span>Connect Google Calendar</span>
           </button>
@@ -1981,66 +2317,66 @@ const CalendarTab = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black/20 backdrop-blur-sm flex items-center justify-center p-6"
+            className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
           >
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="bg-white rounded-[32px] p-8 w-full max-w-md shadow-2xl border border-black/5"
+              className="bg-white/10 rounded-[32px] p-8 w-full max-w-md shadow-2xl border border-white/10 backdrop-blur-xl"
             >
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold tracking-tight">Add Event</h2>
-                <button onClick={() => setIsAddModalOpen(false)} className="p-2 hover:bg-zinc-100 rounded-full">
+                <h2 className="text-2xl font-bold tracking-tight text-white">Add Event</h2>
+                <button onClick={() => setIsAddModalOpen(false)} className="p-2 hover:bg-white/10 rounded-full text-white/40 hover:text-white">
                   <X size={20} />
                 </button>
               </div>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Event Title</label>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Event Title</label>
                   <input 
                     type="text" 
                     value={newEvent.title}
                     onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
                     placeholder="What's happening?"
-                    className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                    className="w-full bg-white/10 border border-white/20 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30 transition-all"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Start Time</label>
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Start Time</label>
                     <input 
                       type="time" 
                       value={newEvent.startTime}
                       onChange={(e) => setNewEvent({ ...newEvent, startTime: e.target.value })}
-                      className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                      className="w-full bg-white/10 border border-white/20 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white transition-all"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">End Time</label>
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">End Time</label>
                     <input 
                       type="time" 
                       value={newEvent.endTime}
                       onChange={(e) => setNewEvent({ ...newEvent, endTime: e.target.value })}
-                      className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                      className="w-full bg-white/10 border border-white/20 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white transition-all"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Category</label>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Category</label>
                   <select 
                     value={newEvent.type}
                     onChange={(e) => setNewEvent({ ...newEvent, type: e.target.value as any })}
-                    className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                    className="w-full bg-white/10 border border-white/20 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white transition-all"
                   >
-                    <option value="work">Work</option>
-                    <option value="social">Social</option>
-                    <option value="health">Health</option>
-                    <option value="other">Other</option>
+                    <option value="work" className="bg-zinc-900">Work</option>
+                    <option value="social" className="bg-zinc-900">Social</option>
+                    <option value="health" className="bg-zinc-900">Health</option>
+                    <option value="other" className="bg-zinc-900">Other</option>
                   </select>
                 </div>
                 <button 
                   onClick={handleAddEvent}
-                  className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-bold mt-4 hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-200"
+                  className="w-full py-4 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-2xl font-bold mt-4 hover:bg-white/30 transition-all shadow-xl shadow-black/20"
                 >
                   Create Event
                 </button>
@@ -2050,13 +2386,13 @@ const CalendarTab = ({
         )}
       </AnimatePresence>
 
-      <div className="bg-white rounded-[40px] border border-black/5 shadow-sm overflow-hidden">
-        <div className="grid grid-cols-[80px_repeat(7,1fr)] border-b border-zinc-100">
-          <div className="p-6 border-r border-zinc-50" />
+      <div className="glass-card rounded-[40px] overflow-hidden">
+        <div className="grid grid-cols-[80px_repeat(7,1fr)] border-b border-white/10">
+          <div className="p-6 border-r border-white/5" />
           {weekDays.map((day, i) => (
-            <div key={i} className={`p-6 text-center border-r border-zinc-50 last:border-0 ${day.toDateString() === new Date().toDateString() ? 'bg-zinc-50' : ''}`}>
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">{days[i]}</p>
-              <p className={`text-2xl font-bold ${day.toDateString() === new Date().toDateString() ? 'text-zinc-900' : 'text-zinc-400'}`}>
+            <div key={i} className={`p-6 text-center border-r border-white/5 last:border-0 ${day.toDateString() === new Date().toDateString() ? 'bg-white/20' : ''}`}>
+              <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1">{days[i]}</p>
+              <p className={`text-2xl font-bold ${day.toDateString() === new Date().toDateString() ? 'text-white' : 'text-white/40'}`}>
                 {day.getDate()}
               </p>
             </div>
@@ -2065,19 +2401,19 @@ const CalendarTab = ({
         <div className="h-[600px] overflow-y-auto relative custom-scrollbar">
           <div className="grid grid-cols-[80px_repeat(7,1fr)] min-h-[1440px]">
             {/* Time Labels */}
-            <div className="border-r border-zinc-50 bg-zinc-50/30">
+            <div className="border-r border-white/10 bg-white/5">
               {[...Array(24)].map((_, i) => (
-                <div key={i} className="h-[60px] border-b border-zinc-50 flex items-start justify-center pt-2">
-                  <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest">{i}:00</span>
+                <div key={i} className="h-[60px] border-b border-white/10 flex items-start justify-center pt-2">
+                  <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{i}:00</span>
                 </div>
               ))}
             </div>
 
             {/* Day Columns */}
             {weekDays.map((day, dayIdx) => (
-              <div key={dayIdx} className="relative border-r border-zinc-50 last:border-0">
+              <div key={dayIdx} className="relative border-r border-white/10 last:border-0">
                 {[...Array(24)].map((_, i) => (
-                  <div key={i} className="h-[60px] border-b border-zinc-50/50" />
+                  <div key={i} className="h-[60px] border-b border-white/5" />
                 ))}
 
                 {/* Render Schedule Blocks only for today */}
@@ -2091,12 +2427,12 @@ const CalendarTab = ({
                   return (
                     <div 
                       key={`block-${i}`}
-                      className={`absolute left-1 right-1 p-2 rounded-xl border shadow-sm z-10 overflow-hidden ${block.type === 'focus' ? 'bg-amber-50 border-amber-100 text-amber-900' : block.type === 'meeting' ? 'bg-blue-50 border-blue-100 text-blue-900' : 'bg-zinc-50 border-zinc-100 text-zinc-900'}`}
+                      className={`absolute left-1 right-1 p-2 rounded-xl border shadow-sm z-10 overflow-hidden ${block.type === 'focus' ? 'bg-amber-500/20 border-amber-500/30 text-white' : block.type === 'meeting' ? 'bg-blue-500/20 border-blue-500/30 text-white' : 'bg-white/10 border-white/20 text-white'}`}
                       style={{ top: `${top}px`, height: `${height}px` }}
                     >
                       <div className="flex flex-col h-full">
-                        <span className="text-[8px] font-bold uppercase tracking-widest opacity-60 mb-0.5">{block.startTime}</span>
-                        <h4 className="text-[10px] font-bold leading-tight line-clamp-2">{block.label}</h4>
+                        <span className="text-[8px] font-bold uppercase tracking-widest text-white/60 mb-0.5">{block.startTime}</span>
+                        <h4 className="text-[10px] font-bold leading-tight line-clamp-2 text-white">{block.label}</h4>
                       </div>
                     </div>
                   );
@@ -2116,7 +2452,7 @@ const CalendarTab = ({
                       drag="y"
                       dragMomentum={false}
                       onDragEnd={(_, info) => handleDragEnd(event, info, day)}
-                      className={`absolute left-1 right-1 p-2 rounded-xl border shadow-sm z-20 overflow-hidden cursor-grab active:cursor-grabbing group ${event.type === 'work' ? 'bg-zinc-900 text-white border-zinc-900' : event.type === 'health' ? 'bg-emerald-50 border-emerald-100 text-emerald-900' : event.type === 'social' ? 'bg-blue-50 border-blue-100 text-blue-900' : event.type === 'workout' ? 'bg-amber-900 text-white border-amber-900' : 'bg-zinc-50 border-zinc-100 text-zinc-900'}`}
+                      className={`absolute left-1 right-1 p-2 rounded-xl border shadow-sm z-20 overflow-hidden cursor-grab active:cursor-grabbing group ${event.type === 'work' ? 'bg-white/20 text-white border-white/30' : event.type === 'health' ? 'bg-emerald-500/20 border-emerald-500/30 text-white' : event.type === 'social' ? 'bg-blue-500/20 border-blue-500/30 text-white' : event.type === 'workout' ? 'bg-amber-500/20 text-white border-amber-500/30' : 'bg-white/10 border-white/20 text-white'}`}
                       style={{ top: `${top}px`, height: `${height}px` }}
                     >
                       <div className="flex flex-col h-full relative">
@@ -2127,10 +2463,10 @@ const CalendarTab = ({
                           }}
                           className="absolute top-0 right-0 p-1 bg-white/10 hover:bg-white/20 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
                         >
-                          <Trash2 size={10} />
+                          <Trash2 size={10} className="text-white" />
                         </button>
-                        <span className={`text-[8px] font-bold uppercase tracking-widest mb-0.5 ${['work', 'workout'].includes(event.type) ? 'text-white/60' : 'opacity-60'}`}>{event.startTime}</span>
-                        <h4 className="text-[10px] font-bold leading-tight line-clamp-2">{event.title}</h4>
+                        <span className="text-[8px] font-bold uppercase tracking-widest mb-0.5 text-white/60">{event.startTime}</span>
+                        <h4 className="text-[10px] font-bold leading-tight line-clamp-2 text-white">{event.title}</h4>
                       </div>
                     </motion.div>
                   );
@@ -2247,24 +2583,24 @@ const WorkoutPlannerTab = ({
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h1 className="text-4xl font-bold tracking-tight text-zinc-900">Workout Planner</h1>
-          <div className="flex gap-2 bg-white p-1 rounded-xl border border-black/5 shadow-sm">
+          <h1 className="text-4xl font-bold tracking-tight text-white">Workout Planner</h1>
+          <div className="flex gap-2 bg-white/10 p-1 rounded-xl border border-white/20 shadow-sm">
             <button onClick={() => {
               const d = new Date(currentDate);
               d.setMonth(d.getMonth() - 1);
               setCurrentDate(d);
-            }} className="p-2 hover:bg-zinc-50 rounded-lg transition-colors">
+            }} className="p-2 hover:bg-white/20 rounded-lg transition-colors text-white">
               <ChevronLeft size={16} />
             </button>
             <button onClick={() => {
               const d = new Date(currentDate);
               d.setMonth(d.getMonth() + 1);
               setCurrentDate(d);
-            }} className="p-2 hover:bg-zinc-50 rounded-lg transition-colors">
+            }} className="p-2 hover:bg-white/20 rounded-lg transition-colors text-white">
               <ChevronRight size={16} />
             </button>
           </div>
-          <span className="text-sm font-bold text-zinc-400 uppercase tracking-widest">
+          <span className="text-sm font-bold text-white/60 uppercase tracking-widest">
             {currentDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
           </span>
         </div>
@@ -2272,10 +2608,10 @@ const WorkoutPlannerTab = ({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-[40px] border border-black/5 shadow-sm overflow-hidden p-8">
+          <div className="glass-card rounded-[40px] overflow-hidden p-8">
             <div className="grid grid-cols-7 mb-4">
               {weekDays.map(day => (
-                <div key={day} className="text-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest py-2">
+                <div key={day} className="text-center text-[10px] font-bold text-white/40 uppercase tracking-widest py-2">
                   {day}
                 </div>
               ))}
@@ -2295,18 +2631,18 @@ const WorkoutPlannerTab = ({
                       setSelectedDay(day);
                       setIsAddModalOpen(true);
                     }}
-                    className={`aspect-square p-2 rounded-2xl border transition-all cursor-pointer group relative ${isToday ? 'bg-zinc-900 border-zinc-900' : 'bg-zinc-50 border-black/5 hover:bg-white hover:shadow-md'}`}
+                    className={`aspect-square p-2 rounded-2xl border transition-all cursor-pointer group relative ${isToday ? 'glass-button' : 'bg-white/5 border-white/10 hover:bg-white/10 hover:shadow-md'}`}
                   >
-                    <span className={`text-xs font-bold ${isToday ? 'text-white' : 'text-zinc-400'}`}>{day.getDate()}</span>
+                    <span className={`text-xs font-bold ${isToday ? 'text-white' : 'text-white/40'}`}>{day.getDate()}</span>
                     <div className="mt-1 space-y-1">
                       {dayWorkouts.map((w, idx) => (
-                        <div key={idx} className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md truncate ${isToday ? 'bg-white/20 text-white' : 'bg-zinc-900 text-white'}`}>
+                        <div key={idx} className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md truncate ${isToday ? 'bg-white/20 text-white' : 'bg-white/20 text-white'}`}>
                           {w.title}
                         </div>
                       ))}
                     </div>
                     <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Plus size={12} className={isToday ? 'text-white' : 'text-zinc-400'} />
+                      <Plus size={12} className={isToday ? 'text-white' : 'text-white/40'} />
                     </div>
                   </div>
                 );
@@ -2319,35 +2655,35 @@ const WorkoutPlannerTab = ({
           <Card title="Upcoming Workouts">
             <div className="space-y-4">
               {workouts.filter(w => new Date(w.date) >= new Date(new Date().setHours(0,0,0,0))).sort((a,b) => a.date.localeCompare(b.date)).slice(0, 5).map(w => (
-                <div key={w.id} className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-black/5 group">
+                <div key={w.id} className="flex items-center justify-between p-4 glass-card rounded-2xl group">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                      <Activity size={16} className="text-zinc-900" />
+                    <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center shadow-sm">
+                      <Activity size={16} className="text-white" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold">{w.title}</h4>
-                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{w.date} • {w.startTime} • {w.duration}m</p>
+                      <h4 className="text-sm font-bold text-white">{w.title}</h4>
+                      <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{w.date} • {w.startTime} • {w.duration}m</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <button 
                       onClick={() => setEditingWorkout(w)}
-                      className="p-2 hover:bg-zinc-200 rounded-lg text-zinc-400 hover:text-zinc-900 transition-all opacity-0 group-hover:opacity-100"
+                      className="p-2 hover:bg-white/10 rounded-lg text-white/40 hover:text-white transition-all opacity-0 group-hover:opacity-100"
                     >
                       <Settings size={14} />
                     </button>
                     <button 
                       onClick={() => handleDeleteWorkout(w.id)}
-                      className="p-2 hover:bg-red-50 rounded-lg text-zinc-400 hover:text-red-600 transition-all opacity-0 group-hover:opacity-100"
+                      className="p-2 hover:bg-red-500/10 rounded-lg text-white/40 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"
                     >
                       <Trash2 size={14} />
                     </button>
-                    <div className={`w-2 h-2 rounded-full ${w.completed ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
+                    <div className={`w-2 h-2 rounded-full ${w.completed ? 'bg-emerald-400' : 'bg-white/20'}`} />
                   </div>
                 </div>
               ))}
               {workouts.length === 0 && (
-                <p className="text-xs text-zinc-400 italic text-center py-4">No workouts planned yet.</p>
+                <p className="text-xs text-white/40 italic text-center py-4">No workouts planned yet.</p>
               )}
             </div>
           </Card>
@@ -2355,12 +2691,12 @@ const WorkoutPlannerTab = ({
           <Card title="Monthly Stats">
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-zinc-500 font-medium">Total Workouts</span>
-                <span className="text-lg font-bold">{workouts.length}</span>
+                <span className="text-sm text-white/60 font-medium">Total Workouts</span>
+                <span className="text-lg font-bold text-white">{workouts.length}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-zinc-500 font-medium">Completed</span>
-                <span className="text-lg font-bold text-emerald-600">
+                <span className="text-sm text-white/60 font-medium">Completed</span>
+                <span className="text-lg font-bold text-emerald-400">
                   {workouts.filter(w => w.completed).length}
                 </span>
               </div>
@@ -2380,79 +2716,79 @@ const WorkoutPlannerTab = ({
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="bg-white rounded-[32px] p-8 w-full max-w-md shadow-2xl border border-black/5"
+              className="bg-white/10 backdrop-blur-xl rounded-[32px] p-8 w-full max-w-md shadow-2xl border border-white/20"
             >
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold tracking-tight">{editingWorkout ? 'Edit Workout' : 'Plan Workout'}</h2>
+                <h2 className="text-2xl font-bold tracking-tight text-white">{editingWorkout ? 'Edit Workout' : 'Plan Workout'}</h2>
                 <button onClick={() => {
                   setIsAddModalOpen(false);
                   setEditingWorkout(null);
-                }} className="p-2 hover:bg-zinc-100 rounded-full">
+                }} className="p-2 hover:bg-white/10 rounded-full text-white">
                   <X size={20} />
                 </button>
               </div>
-              <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-6">
+              <p className="text-xs font-bold text-white/40 uppercase tracking-widest mb-6">
                 For {selectedDay?.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
               </p>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Workout Title</label>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Workout Title</label>
                   <input 
                     type="text" 
                     value={newWorkout.title}
                     onChange={(e) => setNewWorkout({ ...newWorkout, title: e.target.value })}
                     placeholder="e.g. Upper Body Power"
-                    className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/20"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Start Time</label>
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Start Time</label>
                     <input 
                       type="time" 
                       value={newWorkout.startTime}
                       onChange={(e) => setNewWorkout({ ...newWorkout, startTime: e.target.value })}
-                      className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">End Time</label>
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">End Time</label>
                     <input 
                       type="time" 
                       value={newWorkout.endTime}
                       onChange={(e) => setNewWorkout({ ...newWorkout, endTime: e.target.value })}
-                      className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Type</label>
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Type</label>
                     <select 
                       value={newWorkout.type}
                       onChange={(e) => setNewWorkout({ ...newWorkout, type: e.target.value })}
-                      className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white"
                     >
-                      <option>Strength</option>
-                      <option>Cardio</option>
-                      <option>Yoga</option>
-                      <option>HIIT</option>
-                      <option>Mobility</option>
+                      <option className="bg-zinc-900">Strength</option>
+                      <option className="bg-zinc-900">Cardio</option>
+                      <option className="bg-zinc-900">Yoga</option>
+                      <option className="bg-zinc-900">HIIT</option>
+                      <option className="bg-zinc-900">Mobility</option>
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Duration (min)</label>
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Duration (min)</label>
                     <input 
                       type="number" 
                       value={newWorkout.duration}
                       onChange={(e) => setNewWorkout({ ...newWorkout, duration: parseInt(e.target.value) })}
-                      className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
                 </div>
                 <button 
                   onClick={handleAddWorkout}
-                  className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-bold mt-4 hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-200"
+                  className="w-full py-4 bg-white/20 text-white rounded-2xl font-bold mt-4 hover:bg-white/30 transition-all shadow-xl shadow-black/20"
                 >
                   {editingWorkout ? 'Update Workout' : 'Plan Workout'}
                 </button>
@@ -2484,8 +2820,8 @@ const SideQuestsTab = () => {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-4xl font-bold tracking-tight text-zinc-900">Side Quests</h1>
-        <div className="flex items-center gap-3 bg-zinc-900 text-white px-4 py-2 rounded-2xl shadow-lg">
+        <h1 className="text-4xl font-bold tracking-tight text-white">Side Quests</h1>
+        <div className="flex items-center gap-3 glass-button px-4 py-2 rounded-2xl shadow-lg">
           <Trophy size={18} className="text-amber-400" />
           <span className="text-sm font-bold">Level 12 • 2,450 XP</span>
         </div>
@@ -2495,18 +2831,18 @@ const SideQuestsTab = () => {
         <Card title="Dopamine Menu (Sorted by Duration)">
           <div className="space-y-4">
             {dopamineMenu.map((item, i) => (
-              <div key={i} className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-black/5 hover:bg-white hover:shadow-md transition-all cursor-pointer group">
+              <div key={i} className="flex items-center justify-between p-4 glass-card rounded-2xl hover:bg-white/20 transition-all cursor-pointer group">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center group-hover:bg-zinc-900 group-hover:text-white transition-all shadow-sm">
-                    <item.icon size={18} />
+                  <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center group-hover:bg-white/30 group-hover:text-white transition-all shadow-sm border border-transparent group-hover:border-white/30">
+                    <item.icon size={18} className="text-white" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-sm">{item.title}</h4>
-                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{item.duration} min</p>
+                    <h4 className="font-bold text-sm text-white">{item.title}</h4>
+                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{item.duration} min</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs font-bold text-emerald-600">+{item.reward}</span>
+                  <span className="text-xs font-bold text-emerald-400">+{item.reward}</span>
                 </div>
               </div>
             ))}
@@ -2516,20 +2852,20 @@ const SideQuestsTab = () => {
         <Card title="Side Quests (Make Life Interesting)">
           <div className="space-y-4">
             {sideQuests.map((quest, i) => (
-              <div key={i} className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-black/5 hover:bg-white hover:shadow-md transition-all cursor-pointer group">
+              <div key={i} className="flex items-center justify-between p-4 glass-card rounded-2xl hover:bg-white/20 transition-all cursor-pointer group">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center group-hover:bg-zinc-900 group-hover:text-white transition-all shadow-sm">
-                    <quest.icon size={18} />
+                  <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center group-hover:bg-white/30 group-hover:text-white transition-all shadow-sm border border-transparent group-hover:border-white/30">
+                    <quest.icon size={18} className="text-white" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-sm">{quest.title}</h4>
-                    <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${quest.difficulty === 'Easy' ? 'bg-emerald-100 text-emerald-600' : quest.difficulty === 'Medium' ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'}`}>
+                    <h4 className="font-bold text-sm text-white">{quest.title}</h4>
+                    <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${quest.difficulty === 'Easy' ? 'bg-emerald-500/20 text-emerald-400' : quest.difficulty === 'Medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'}`}>
                       {quest.difficulty}
                     </span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs font-bold text-amber-600">+{quest.reward}</span>
+                  <span className="text-xs font-bold text-amber-400">+{quest.reward}</span>
                 </div>
               </div>
             ))}
@@ -2541,20 +2877,166 @@ const SideQuestsTab = () => {
 };
 
 const KnowledgeBaseTab = () => {
-  const [selectedTopic, setSelectedTopic] = useState<any>(null);
-  const topics = [
-    { title: "Artificial Intelligence", notes: 12, lastUpdated: "2h ago", content: "AI is transforming how we work and live. Key areas include LLMs, computer vision, and robotics." },
-    { title: "Productivity Systems", notes: 8, lastUpdated: "1d ago", content: "Systems like GTD, Time Blocking, and the Zettelkasten method help manage information and tasks." },
-    { title: "Digital Health", notes: 5, lastUpdated: "3d ago", content: "Using technology to improve physical and mental well-being, from wearables to meditation apps." },
-    { title: "Philosophy", notes: 15, lastUpdated: "5d ago", content: "Exploring fundamental questions about existence, knowledge, values, and reason." }
-  ];
+  const [selectedTopic, setSelectedTopic] = useState<KnowledgeTopic | null>(null);
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+  const [isAddingNote, setIsAddingNote] = useState(false);
+  const [newNote, setNewNote] = useState({ title: '', content: '' });
+  const [aiQuery, setAiQuery] = useState('');
+  const [aiResponse, setAiResponse] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
+
+  const [topics, setTopics] = useState<KnowledgeTopic[]>([
+    { 
+      id: '1', 
+      title: "Artificial Intelligence", 
+      lastUpdated: "2h ago", 
+      content: "AI is transforming how we work and live. Key areas include LLMs, computer vision, and robotics.",
+      notes: [
+        { id: 'n1', title: 'LLM Basics', content: 'Large Language Models are trained on vast amounts of text data to understand and generate human-like text. They use transformer architectures to process sequences of information.', date: '2026-03-21' },
+        { id: 'n2', title: 'Neural Networks', content: 'Inspired by the human brain, neural networks are the backbone of deep learning. They consist of layers of interconnected nodes that learn patterns from data.', date: '2026-03-20' }
+      ]
+    },
+    { 
+      id: '2', 
+      title: "Productivity Systems", 
+      lastUpdated: "1d ago", 
+      content: "Systems like GTD, Time Blocking, and the Zettelkasten method help manage information and tasks.",
+      notes: [
+        { id: 'n3', title: 'GTD Method', content: 'Getting Things Done is a personal productivity system developed by David Allen. It relies on moving planned tasks and projects out of the mind by recording them externally.', date: '2026-03-19' }
+      ]
+    },
+    { 
+      id: '3', 
+      title: "Digital Health", 
+      lastUpdated: "3d ago", 
+      content: "Using technology to improve physical and mental well-being, from wearables to meditation apps.",
+      notes: []
+    },
+    { 
+      id: '4', 
+      title: "Philosophy", 
+      lastUpdated: "5d ago", 
+      content: "Exploring fundamental questions about existence, knowledge, values, and reason.",
+      notes: []
+    }
+  ]);
+
+  const handleAddNote = () => {
+    if (!selectedTopic || !newNote.title || !newNote.content) return;
+
+    const note: Note = {
+      id: Math.random().toString(36).substr(2, 9),
+      title: newNote.title,
+      content: newNote.content,
+      date: new Date().toISOString().split('T')[0]
+    };
+
+    const updatedTopics = topics.map(t => {
+      if (t.id === selectedTopic.id) {
+        return {
+          ...t,
+          notes: [note, ...t.notes],
+          lastUpdated: 'Just now'
+        };
+      }
+      return t;
+    });
+
+    setTopics(updatedTopics);
+    setSelectedTopic(updatedTopics.find(t => t.id === selectedTopic.id) || null);
+    setIsAddingNote(false);
+    setNewNote({ title: '', content: '' });
+  };
+
+  const handleAiQuery = async () => {
+    if (!aiQuery.trim() || !selectedTopic) return;
+
+    try {
+      setIsAiLoading(true);
+      setAiResponse('');
+      
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        setAiResponse("Error: Gemini API key is not configured. Please check your environment variables.");
+        return;
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `You are an AI assistant for a personal knowledge base.
+        The user is asking a question about the topic: "${selectedTopic.title}".
+        
+        Topic Overview: ${selectedTopic.content}
+        
+        User's Notes on this topic:
+        ${selectedTopic.notes.length > 0 
+          ? selectedTopic.notes.map(n => `- ${n.title}: ${n.content}`).join('\n')
+          : "No notes available for this topic yet."}
+        
+        User Question: ${aiQuery}
+        
+        Answer the question based on the provided topic overview and notes. If the information is not in the notes, use your general knowledge but mention it wasn't in the notes. Keep the answer concise and helpful. Use Markdown for formatting.`,
+      });
+
+      const text = response.text;
+      if (!text) {
+        throw new Error("Empty response from AI");
+      }
+      
+      setAiResponse(text);
+    } catch (error: any) {
+      console.error("AI Assistant error:", error);
+      let errorMessage = "Sorry, I encountered an error while processing your request.";
+      if (error.message?.includes("API key")) {
+        errorMessage = "Invalid API key. Please check your configuration.";
+      } else if (error.message?.includes("quota")) {
+        errorMessage = "API quota exceeded. Please try again later.";
+      }
+      setAiResponse(errorMessage);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  if (selectedNote) {
+    return (
+      <div className="space-y-8">
+        <button 
+          onClick={() => setSelectedNote(null)}
+          className="flex items-center gap-2 text-sm font-bold text-white/40 hover:text-white transition-colors uppercase tracking-widest"
+        >
+          <ChevronLeft size={16} />
+          Back to {selectedTopic?.title}
+        </button>
+
+        <div className="max-w-3xl mx-auto">
+          <Card>
+            <div className="space-y-6">
+              <div className="flex flex-col gap-2">
+                <h1 className="text-3xl font-bold tracking-tight text-white">{selectedNote.title}</h1>
+                <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{selectedNote.date}</p>
+              </div>
+              <div className="prose prose-invert prose-sm max-w-none">
+                <p className="text-white/70 leading-relaxed whitespace-pre-wrap">{selectedNote.content}</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   if (selectedTopic) {
     return (
       <div className="space-y-8">
         <button 
-          onClick={() => setSelectedTopic(null)}
-          className="flex items-center gap-2 text-sm font-bold text-zinc-400 hover:text-zinc-900 transition-colors uppercase tracking-widest"
+          onClick={() => {
+            setSelectedTopic(null);
+            setAiResponse('');
+            setAiQuery('');
+          }}
+          className="flex items-center gap-2 text-sm font-bold text-white/40 hover:text-white transition-colors uppercase tracking-widest"
         >
           <ChevronLeft size={16} />
           Back to Knowledge Base
@@ -2563,34 +3045,88 @@ const KnowledgeBaseTab = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
             <div className="flex flex-col gap-4">
-              <h1 className="text-4xl font-bold tracking-tight text-zinc-900">{selectedTopic.title}</h1>
-              <div className="flex items-center gap-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                <span>{selectedTopic.notes} Notes</span>
+              <h1 className="text-4xl font-bold tracking-tight text-white">{selectedTopic.title}</h1>
+              <div className="flex items-center gap-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                <span>{selectedTopic.notes.length} Notes</span>
                 <span>•</span>
                 <span>Updated {selectedTopic.lastUpdated}</span>
               </div>
             </div>
 
             <Card title="Topic Overview">
-              <div className="prose prose-zinc prose-sm max-w-none">
-                <p className="text-zinc-600 leading-relaxed">{selectedTopic.content}</p>
+              <div className="prose prose-invert prose-sm max-w-none">
+                <p className="text-white/70 leading-relaxed">{selectedTopic.content}</p>
               </div>
             </Card>
 
             <Card title="Notes">
               <div className="space-y-4">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="p-4 bg-zinc-50 rounded-2xl border border-black/5 hover:bg-white hover:shadow-sm transition-all cursor-pointer group">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-sm">Note Title {i}</h4>
-                      <ChevronRight size={16} className="text-zinc-300 group-hover:text-zinc-900" />
+                {isAddingNote ? (
+                  <div className="p-6 glass-card rounded-2xl space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Note Title</label>
+                      <input 
+                        type="text" 
+                        value={newNote.title}
+                        onChange={(e) => setNewNote({ ...newNote, title: e.target.value })}
+                        placeholder="Enter note title..."
+                        className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30"
+                      />
                     </div>
-                    <p className="text-xs text-zinc-400 mt-1">Snippet of the note content goes here...</p>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Content</label>
+                      <textarea 
+                        value={newNote.content}
+                        onChange={(e) => setNewNote({ ...newNote, content: e.target.value })}
+                        placeholder="Write your thoughts..."
+                        rows={5}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30 resize-none"
+                      />
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                      <button 
+                        onClick={handleAddNote}
+                        className="flex-1 py-3 glass-button text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/30 transition-all"
+                      >
+                        Save Note
+                      </button>
+                      <button 
+                        onClick={() => setIsAddingNote(false)}
+                        className="px-6 py-3 bg-white/10 border border-white/20 text-white/60 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/20 transition-all"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                ))}
-                <button className="w-full py-3 border border-dashed border-zinc-200 rounded-2xl text-xs font-bold text-zinc-400 hover:bg-zinc-50 transition-all uppercase tracking-widest">
-                  + Add New Note
-                </button>
+                ) : (
+                  <>
+                    {selectedTopic.notes.length > 0 ? (
+                      selectedTopic.notes.map(note => (
+                        <div 
+                          key={note.id} 
+                          onClick={() => setSelectedNote(note)}
+                          className="p-4 glass-card rounded-2xl hover:bg-white/20 transition-all cursor-pointer group"
+                        >
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-bold text-sm text-white">{note.title}</h4>
+                            <ChevronRight size={16} className="text-white/20 group-hover:text-white" />
+                          </div>
+                          <p className="text-xs text-white/40 mt-1 line-clamp-1">{note.content}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-8 text-center border border-dashed border-white/10 rounded-2xl">
+                        <p className="text-xs text-white/40 font-medium">No notes yet for this topic.</p>
+                      </div>
+                    )}
+                    <button 
+                      onClick={() => setIsAddingNote(true)}
+                      className="w-full py-3 border border-dashed border-white/20 rounded-2xl text-xs font-bold text-white/40 hover:bg-white/5 transition-all uppercase tracking-widest"
+                    >
+                      + Add New Note
+                    </button>
+                  </>
+                )}
               </div>
             </Card>
           </div>
@@ -2598,17 +3134,38 @@ const KnowledgeBaseTab = () => {
           <div className="space-y-8">
             <Card title="AI Assistant">
               <div className="space-y-4">
-                <p className="text-xs text-zinc-500 italic">Ask the AI about this topic based on your notes.</p>
+                <p className="text-xs text-white/40 italic">Ask the AI about this topic based on your notes.</p>
                 <div className="flex gap-2">
                   <input 
                     type="text" 
+                    value={aiQuery}
+                    onChange={(e) => setAiQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAiQuery()}
                     placeholder="Ask anything..." 
-                    className="flex-1 bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none"
+                    className="flex-1 bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30"
                   />
-                  <button className="p-3 bg-zinc-900 text-white rounded-xl">
-                    <Sparkles size={18} />
+                  <button 
+                    onClick={handleAiQuery}
+                    disabled={isAiLoading}
+                    className="p-3 glass-button text-white rounded-xl disabled:opacity-50"
+                  >
+                    {isAiLoading ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
                   </button>
                 </div>
+                {aiResponse && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-4 glass-card rounded-2xl"
+                  >
+                    <div className="flex items-start gap-3">
+                      <Sparkles size={14} className="text-amber-400 shrink-0 mt-1" />
+                      <div className="prose prose-invert prose-xs max-w-none">
+                        <Markdown>{aiResponse}</Markdown>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
               </div>
             </Card>
           </div>
@@ -2620,10 +3177,10 @@ const KnowledgeBaseTab = () => {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-4xl font-bold tracking-tight text-zinc-900">Knowledge Base</h1>
+        <h1 className="text-4xl font-bold tracking-tight text-white">Knowledge Base</h1>
         <button 
           onClick={() => alert("New Topic feature coming soon!")}
-          className="bg-zinc-900 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-zinc-800 transition-colors shadow-lg shadow-zinc-200"
+          className="glass-button text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium shadow-lg"
         >
           <Plus size={18} />
           <span>New Topic</span>
@@ -2631,20 +3188,20 @@ const KnowledgeBaseTab = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {topics.map((topic, i) => (
+        {topics.map((topic) => (
           <Card 
-            key={i} 
+            key={topic.id} 
             className="hover:shadow-md transition-all cursor-pointer group"
           >
             <div onClick={() => setSelectedTopic(topic)}>
-              <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-zinc-900 group-hover:text-white transition-all">
-                <BookOpen size={20} />
+              <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-white/20 group-hover:text-white transition-all border border-transparent group-hover:border-white/30">
+                <BookOpen size={20} className="text-white" />
               </div>
-              <h3 className="text-lg font-bold mb-1">{topic.title}</h3>
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">{topic.notes} Notes</p>
-              <div className="flex items-center justify-between pt-4 border-t border-zinc-50">
-                <span className="text-[8px] font-bold text-zinc-300 uppercase tracking-widest">Updated {topic.lastUpdated}</span>
-                <ChevronRight size={14} className="text-zinc-300 group-hover:text-zinc-900" />
+              <h3 className="text-lg font-bold mb-1 text-white">{topic.title}</h3>
+              <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-4">{topic.notes.length} Notes</p>
+              <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Updated {topic.lastUpdated}</span>
+                <ChevronRight size={14} className="text-white/20 group-hover:text-white" />
               </div>
             </div>
           </Card>
@@ -2654,17 +3211,17 @@ const KnowledgeBaseTab = () => {
       <Card title="Recent AI Summaries">
         <div className="space-y-4">
           {[1, 2, 3].map(i => (
-            <div key={i} className="p-4 bg-zinc-50 rounded-2xl border border-black/5 flex items-center justify-between group cursor-pointer hover:bg-white hover:shadow-sm transition-all">
+            <div key={i} className="p-4 bg-white/5 rounded-2xl border border-white/10 flex items-center justify-between group cursor-pointer hover:bg-white/10 hover:shadow-sm transition-all">
               <div className="flex items-center gap-4">
-                <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                  <Sparkles size={14} className="text-amber-500" />
+                <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center shadow-sm">
+                  <Sparkles size={14} className="text-amber-400" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm">Summary of "Building a Second Brain"</h4>
-                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Added yesterday</p>
+                  <h4 className="font-bold text-sm text-white">Summary of "Building a Second Brain"</h4>
+                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Added yesterday</p>
                 </div>
               </div>
-              <ChevronRight size={16} className="text-zinc-300 group-hover:text-zinc-900" />
+              <ChevronRight size={16} className="text-white/20 group-hover:text-white" />
             </div>
           ))}
         </div>
@@ -2673,39 +3230,95 @@ const KnowledgeBaseTab = () => {
   );
 };
 
-const SettingsTab = () => {
+const SettingsTab = ({ 
+  interests, 
+  onUpdateInterests 
+}: { 
+  interests: string[], 
+  onUpdateInterests: (i: string[]) => void 
+}) => {
+  const [newInterest, setNewInterest] = useState('');
+
+  const addInterest = () => {
+    if (newInterest && !interests.includes(newInterest)) {
+      onUpdateInterests([...interests, newInterest]);
+      setNewInterest('');
+    }
+  };
+
+  const removeInterest = (interest: string) => {
+    onUpdateInterests(interests.filter(i => i !== interest));
+  };
+
   return (
     <div className="space-y-8">
-      <h1 className="text-4xl font-bold tracking-tight text-zinc-900">Settings</h1>
+      <h1 className="text-4xl font-bold tracking-tight text-white">Settings</h1>
       
       <div className="max-w-2xl space-y-6">
         <Card title="Profile Settings">
           <div className="space-y-4">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-zinc-100 rounded-2xl overflow-hidden">
+              <div className="w-16 h-16 bg-white/10 rounded-2xl overflow-hidden">
                 <img src="https://picsum.photos/seed/user/100/100" alt="User" referrerPolicy="no-referrer" />
               </div>
-              <button className="px-4 py-2 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 transition-all">
+              <button className="px-4 py-2 glass-button text-white/60 rounded-xl text-xs font-bold hover:text-white transition-all">
                 Change Photo
               </button>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Full Name</label>
-                <input type="text" defaultValue="Lea Rattei" className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none" />
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Full Name</label>
+                <input type="text" defaultValue="Lea Rattei" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30" />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Email</label>
-                <input type="email" defaultValue="lea.rattei@gmail.com" className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none" />
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Email</label>
+                <input type="email" defaultValue="lea.rattei@gmail.com" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30" />
               </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Newsletter Interests">
+          <div className="space-y-6">
+            <p className="text-sm text-white/60">Select the topics you're interested in. These will be used to curate your daily briefing on the overview page.</p>
+            
+            <div className="flex flex-wrap gap-2">
+              {interests.map(interest => (
+                <div key={interest} className="flex items-center gap-2 bg-white/20 text-white px-3 py-1.5 rounded-full text-xs font-medium border border-white/10">
+                  {interest}
+                  <button 
+                    onClick={() => removeInterest(interest)}
+                    className="hover:text-red-400 transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                value={newInterest}
+                onChange={(e) => setNewInterest(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addInterest()}
+                placeholder="Add a new area of interest..." 
+                className="flex-1 bg-white/10 border border-white/20 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30" 
+              />
+              <button 
+                onClick={addInterest}
+                className="px-4 py-2 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-xl text-xs font-bold hover:bg-white/30 transition-all shadow-lg shadow-black/20"
+              >
+                Add
+              </button>
             </div>
           </div>
         </Card>
 
         <Card title="Life Vision Settings">
           <div className="space-y-4">
-            <p className="text-sm text-zinc-500">Your vision was generated on Mar 21, 2026. You can reset it to start the AI questionnaire again.</p>
-            <button className="px-6 py-3 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition-all border border-red-100">
+            <p className="text-sm text-white/60">Your vision was generated on Mar 21, 2026. You can reset it to start the AI questionnaire again.</p>
+            <button className="px-6 py-3 bg-red-500/10 text-red-400 rounded-xl text-xs font-bold hover:bg-red-500/20 transition-all border border-red-500/20">
               Reset Life Vision
             </button>
           </div>
@@ -2715,11 +3328,11 @@ const SettingsTab = () => {
   );
 };
 const SidebarItem = ({ icon: Icon, label, active = false, collapsed = false }: { icon: any, label: string, active?: boolean, collapsed?: boolean }) => (
-  <div className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-300 group relative ${active ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-500 hover:bg-zinc-100'}`}>
+  <div className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-300 group relative ${active ? 'glass-button shadow-lg' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>
     <Icon size={20} className="shrink-0" />
-    {!collapsed && <span className="font-medium text-sm whitespace-nowrap">{label}</span>}
+    {!collapsed && <span className="font-semibold text-sm whitespace-nowrap">{label}</span>}
     {collapsed && (
-      <div className="absolute left-full ml-4 px-3 py-1 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 whitespace-nowrap">
+      <div className="absolute left-full ml-4 px-3 py-1 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-widest rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 whitespace-nowrap border border-white/10">
         {label}
       </div>
     )}
@@ -2727,8 +3340,8 @@ const SidebarItem = ({ icon: Icon, label, active = false, collapsed = false }: {
 );
 
 const Card = ({ title, children, className = "" }: { title?: string, children: React.ReactNode, className?: string }) => (
-  <div className={`bg-white rounded-3xl border border-black/5 p-6 shadow-sm ${className}`}>
-    {title && <h3 className="text-sm font-semibold text-zinc-900 mb-4 uppercase tracking-wider">{title}</h3>}
+  <div className={`glass-card rounded-3xl p-6 ${className}`}>
+    {title && <h3 className="text-sm font-semibold text-white/90 mb-4 uppercase tracking-wider">{title}</h3>}
     {children}
   </div>
 );
@@ -2737,7 +3350,7 @@ const Card = ({ title, children, className = "" }: { title?: string, children: R
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'overview' | 'vision' | 'projects' | 'work' | 'calendar' | 'quests' | 'knowledge' | 'workout' | 'settings'>('overview');
-  const [interests] = useState(['Artificial Intelligence', 'Productivity', 'Digital Health']);
+  const [interests, setInterests] = useState(['Artificial Intelligence', 'Productivity', 'Digital Health']);
   const [dailyPulseData, setDailyPulseData] = useState<DailyPulseData>({
     energy: 0,
     focus: 0,
@@ -2745,6 +3358,11 @@ export default function App() {
   });
   const [isOverwhelmed, setIsOverwhelmed] = useState(false);
   const [visionData, setVisionData] = useState<LifeVisionData | null>(null);
+  const [projects, setProjects] = useState<Project[]>([
+    { id: '1', title: 'lifedotAI MVP', progress: 65, status: 'on-track', deadline: 'Mar 30', description: 'Building the first version of the life management AI.', tasks: ['Implement Work Mode', 'Fix Calendar Alignment', 'Refine News UI'] },
+    { id: '2', title: 'Health Transformation', progress: 40, status: 'at-risk', deadline: 'Apr 15', description: 'Focusing on physical and mental well-being.', tasks: ['Daily 5km run', 'Meditation 10min', 'Meal prep'] },
+    { id: '3', title: 'Financial Freedom Plan', progress: 20, status: 'on-track', deadline: 'Dec 31', description: 'Long-term wealth building and budgeting.', tasks: ['Set up emergency fund', 'Automate savings', 'Review investments'] }
+  ]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([
     { id: 't1', title: 'Design Landing Page', duration: 60, urgency: 'high', isStrategic: true, isFrog: false, status: 'todo' },
@@ -2759,7 +3377,7 @@ export default function App() {
     { id: 'e4', title: 'Gym Session', date: new Date().toISOString().split('T')[0], startTime: '04:30 PM', endTime: '05:30 PM', type: 'health' }
   ]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
-  const [isCheckInOpen, setIsCheckInOpen] = useState(true);
+  const [isCheckInOpen, setIsCheckInOpen] = useState(false);
 
   const handleAddWorkout = (w: Workout) => {
     setWorkouts([...workouts, w]);
@@ -2855,7 +3473,13 @@ export default function App() {
 
     // Generate schedule with AI
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        console.error("Gemini API key is not configured.");
+        setActiveTab('work');
+        return;
+      }
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Create a daily schedule for a user with these tasks:
@@ -2882,27 +3506,31 @@ export default function App() {
         }
       });
 
-      const data = JSON.parse(response.text || '{}');
-      setSchedule(data);
+      const text = response.text;
+      if (text) {
+        const data = JSON.parse(text);
+        setSchedule(data);
+      }
       setActiveTab('work');
     } catch (error) {
       console.error("Schedule generation failed:", error);
+      setActiveTab('work');
     }
   };
 
   const isSidebarCollapsed = true; // Always collapsed as per user request
 
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white">
+    <div className="min-h-screen text-white font-sans selection:bg-white/30 selection:text-white">
       <div className="flex h-screen overflow-hidden">
         
         {/* Left Sidebar - Menu */}
-        <aside className={`border-r border-black/5 bg-white flex flex-col p-6 transition-all duration-500 ease-in-out ${isSidebarCollapsed ? 'w-24' : 'w-64'}`}>
+        <aside className={`glass-sidebar flex flex-col p-6 transition-all duration-500 ease-in-out ${isSidebarCollapsed ? 'w-24' : 'w-64'}`}>
           <div className={`flex items-center gap-2 mb-10 px-2 transition-all duration-500 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
-            <div className="w-8 h-8 bg-zinc-900 rounded-lg flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 bg-white/20 backdrop-blur-sm border border-white/30 rounded-lg flex items-center justify-center shrink-0 shadow-sm">
               <Compass className="text-white" size={18} />
             </div>
-            {!isSidebarCollapsed && <span className="font-bold text-xl tracking-tight italic whitespace-nowrap">lifedotAI</span>}
+            {!isSidebarCollapsed && <span className="font-bold text-xl tracking-tight italic whitespace-nowrap text-white">lifedotAI</span>}
           </div>
 
           <nav className="flex-1 space-y-1">
@@ -2932,18 +3560,18 @@ export default function App() {
             </div>
           </nav>
 
-          <div className="mt-auto pt-6 border-t border-black/5 space-y-1">
+          <div className="mt-auto pt-6 border-t border-white/10 space-y-1">
             <div onClick={() => setActiveTab('settings')}>
               <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} collapsed={isSidebarCollapsed} />
             </div>
-            <div className={`flex items-center gap-3 px-4 py-3 mt-4 bg-zinc-100 rounded-2xl transition-all duration-500 ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}>
-              <div className="w-8 h-8 bg-zinc-300 rounded-full overflow-hidden shrink-0">
+            <div className={`flex items-center gap-3 px-4 py-3 mt-4 bg-white/10 rounded-2xl transition-all duration-500 ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}>
+              <div className="w-8 h-8 bg-white/20 rounded-full overflow-hidden shrink-0">
                 <img src="https://picsum.photos/seed/user/100/100" alt="User" referrerPolicy="no-referrer" />
               </div>
               {!isSidebarCollapsed && (
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">Lea Rattei</p>
-                  <p className="text-xs text-zinc-500 truncate">Pro Plan</p>
+                  <p className="text-xs text-white/40 truncate">Pro Plan</p>
                 </div>
               )}
             </div>
@@ -2951,32 +3579,28 @@ export default function App() {
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto bg-zinc-50/50">
+        <main className="flex-1 overflow-y-auto bg-transparent">
           {/* Header */}
-          <header className="h-20 flex items-center justify-between px-8 sticky top-0 bg-zinc-50/80 backdrop-blur-md z-10">
-            <div className="flex items-center gap-4 bg-white border border-black/5 px-4 py-2 rounded-2xl w-96 shadow-sm">
-              <Search size={18} className="text-zinc-400" />
+          <header className="h-20 flex items-center justify-between px-8 sticky top-0 bg-white/5 backdrop-blur-md z-10">
+            <div className="flex items-center gap-4 bg-white/10 border border-white/20 px-4 py-2 rounded-2xl w-96 shadow-sm backdrop-blur-sm">
+              <Search size={18} className="text-white/60" />
               <input 
                 type="text" 
                 placeholder="Search your life..." 
-                className="bg-transparent border-none outline-none text-sm w-full"
+                className="bg-transparent border-none outline-none text-sm w-full text-white placeholder:text-white/40"
               />
             </div>
             <div className="flex items-center gap-4">
               <button 
                 onClick={() => setIsOverwhelmed(true)}
-                className="px-4 py-2 bg-red-50 text-red-600 rounded-xl flex items-center gap-2 text-xs font-bold uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100"
+                className="px-4 py-2 bg-red-500/20 text-red-200 rounded-xl flex items-center gap-2 text-xs font-bold uppercase tracking-widest hover:bg-red-500/30 transition-all border border-red-500/30"
               >
                 <Wind size={16} />
                 <span>Overwhelmed</span>
               </button>
-              <button className="p-2 hover:bg-white rounded-full transition-colors relative">
-                <Bell size={20} className="text-zinc-600" />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-zinc-50"></span>
-              </button>
-              <button className="bg-zinc-900 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-zinc-800 transition-colors shadow-lg shadow-zinc-200">
-                <Plus size={18} />
-                <span>New Entry</span>
+              <button className="p-2 hover:bg-white/10 rounded-full transition-colors relative">
+                <Bell size={20} className="text-white/80" />
+                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white/20"></span>
               </button>
             </div>
           </header>
@@ -2992,8 +3616,8 @@ export default function App() {
                   className="space-y-8"
                 >
                   <div className="flex flex-col gap-2">
-                    <h1 className="text-4xl font-bold tracking-tight text-zinc-900">Good morning, Lea.</h1>
-                    <p className="text-zinc-500 font-medium">Ready to build a life you love today?</p>
+                    <h1 className="text-4xl font-bold tracking-tight text-white">Good morning, Lea.</h1>
+                    <p className="text-white/60 font-medium">Ready to build a life you love today?</p>
                   </div>
 
                   {/* Grid Layout */}
@@ -3003,7 +3627,7 @@ export default function App() {
                     <div className="lg:col-span-2 space-y-8">
                       <Card title="Focus for today">
                         <div className="space-y-4">
-                          <div className="flex items-center justify-between p-4 bg-zinc-900 text-white rounded-2xl">
+                          <div className="flex items-center justify-between p-4 bg-white/20 backdrop-blur-md border border-white/30 text-white rounded-2xl">
                             <div className="flex items-center gap-4">
                               <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
                                 <Zap size={20} />
@@ -3017,12 +3641,12 @@ export default function App() {
                           </div>
                           
                           <div className="grid grid-cols-2 gap-4">
-                            <div className="p-4 border border-black/5 rounded-2xl hover:bg-zinc-50 transition-colors cursor-pointer">
-                              <p className="text-xs font-bold text-zinc-400 uppercase mb-1">Indecision to solve</p>
+                            <div className="p-4 border border-white/10 rounded-2xl hover:bg-white/5 transition-colors cursor-pointer">
+                              <p className="text-xs font-bold text-white/40 uppercase mb-1">Indecision to solve</p>
                               <p className="font-semibold">Choose tech stack for backend</p>
                             </div>
-                            <div className="p-4 border border-black/5 rounded-2xl hover:bg-zinc-50 transition-colors cursor-pointer">
-                              <p className="text-xs font-bold text-zinc-400 uppercase mb-1">Next milestone</p>
+                            <div className="p-4 border border-white/10 rounded-2xl hover:bg-white/5 transition-colors cursor-pointer">
+                              <p className="text-xs font-bold text-white/40 uppercase mb-1">Next milestone</p>
                               <p className="font-semibold">Complete MVP layout</p>
                             </div>
                           </div>
@@ -3064,6 +3688,7 @@ export default function App() {
                   <WorkMode 
                     tasks={tasks} 
                     allTasks={allTasks}
+                    projects={projects}
                     schedule={schedule} 
                     onUpdateSchedule={setSchedule} 
                     onUpdateTasks={setAllTasks}
@@ -3077,7 +3702,12 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                 >
-                  <ProjectsTab />
+                  <ProjectsTab 
+                    projects={projects} 
+                    onAddProject={(p) => setProjects([...projects, p])}
+                    onUpdateProject={(p) => setProjects(prev => prev.map(proj => proj.id === p.id ? p : proj))}
+                    onDeleteProject={(id) => setProjects(prev => prev.filter(p => p.id !== id))}
+                  />
                 </motion.div>
               ) : activeTab === 'calendar' ? (
                 <motion.div 
@@ -3139,7 +3769,10 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                 >
-                  <SettingsTab />
+                  <SettingsTab 
+                    interests={interests} 
+                    onUpdateInterests={setInterests} 
+                  />
                 </motion.div>
               ) : (
                 <motion.div 
@@ -3148,11 +3781,11 @@ export default function App() {
                   animate={{ opacity: 1 }}
                   className="flex flex-col items-center justify-center py-40 text-center"
                 >
-                  <div className="w-20 h-20 bg-zinc-100 rounded-3xl flex items-center justify-center mb-6">
-                    <Compass className="text-zinc-400" size={40} />
+                  <div className="w-20 h-20 bg-white/10 rounded-3xl flex items-center justify-center mb-6">
+                    <Compass className="text-white/40" size={40} />
                   </div>
                   <h2 className="text-2xl font-bold mb-2 uppercase tracking-widest">Coming Soon</h2>
-                  <p className="text-zinc-500 font-medium">We're still building the {activeTab} lab. Stay tuned!</p>
+                  <p className="text-white/40 font-medium">We're still building the {activeTab} lab. Stay tuned!</p>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -3168,11 +3801,11 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[90] bg-white flex flex-col items-center justify-center p-6"
+              className="fixed inset-0 z-[90] bg-black/40 backdrop-blur-xl flex flex-col items-center justify-center p-6"
             >
               <button 
                 onClick={() => setIsCheckInOpen(false)}
-                className="absolute top-8 right-8 p-3 hover:bg-zinc-100 rounded-full transition-colors border border-black/5"
+                className="absolute top-8 right-8 p-3 hover:bg-white/10 rounded-full transition-colors border border-white/10"
               >
                 <X size={24} />
               </button>

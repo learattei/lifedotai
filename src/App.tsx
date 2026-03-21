@@ -1243,7 +1243,7 @@ const TaskDatabaseTab = ({
               </div>
               <div className="pt-4 border-t border-white/10">
                 <p className="text-[10px] text-white/40 italic">
-                  Use the Task Database to capture everything. AI will pull from here during your morning check-in.
+                  Tasks added here appear in the Overview, Bingo board, Wheel, and Pomodoro session picker.
                 </p>
               </div>
             </div>
@@ -1254,445 +1254,380 @@ const TaskDatabaseTab = ({
   );
 };
 
-const WorkMode = ({ 
-  tasks, 
+const WorkMode = ({
   allTasks,
   projects,
-  schedule, 
-  onUpdateSchedule,
   onUpdateTasks
 }: {
-  tasks: Task[],
   allTasks: Task[],
   projects: Project[],
-  schedule: DailySchedule | null, 
-  onUpdateSchedule: (s: DailySchedule) => void,
   onUpdateTasks: (t: Task[]) => void
 }) => {
-  const [mode, setMode] = useState<'overview' | 'pomodoro' | 'wheel' | 'bingo' | 'task-database'>('overview');
-  const [activeBlock, setActiveBlock] = useState<TimeBlock | null>(null);
-  const [isSpinning, setIsSpinning] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [chatInput, setChatInput] = useState('');
-  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'ai', text: string }[]>([]);
-  const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
+  const [mode, setMode] = useState<'task-database' | 'overview' | 'bingo' | 'wheel' | 'pomodoro'>('task-database');
 
-  const toggleTaskStatus = (taskId: string) => {
-    const updatedTasks = allTasks.map(t => 
+  // ---- Overview ----
+  const toggleTask = (taskId: string) => {
+    onUpdateTasks(allTasks.map(t =>
       t.id === taskId ? { ...t, status: (t.status === 'todo' ? 'done' : 'todo') as 'todo' | 'done' } : t
-    );
-    onUpdateTasks(updatedTasks);
+    ));
   };
 
-  const removeTaskFromBlock = (blockId: string, taskId: string) => {
-    if (!schedule) return;
-    const updatedBlocks = schedule.blocks.map(block => 
-      block.id === blockId ? { ...block, tasks: block.tasks.filter(id => id !== taskId) } : block
-    );
-    onUpdateSchedule({ ...schedule, blocks: updatedBlocks });
+  // ---- Bingo ----
+  const makeBingoBoard = (): (Task | null)[] => {
+    const todo = allTasks.filter(t => t.status === 'todo');
+    const shuffled = [...todo].sort(() => Math.random() - 0.5).slice(0, 16);
+    while (shuffled.length < 16) shuffled.push(null);
+    return shuffled;
+  };
+  const [bingoBoard, setBingoBoard] = useState<(Task | null)[]>(() => makeBingoBoard());
+  const [markedCells, setMarkedCells] = useState<Set<number>>(new Set());
+
+  const checkBingo = (marked: Set<number>) => {
+    const lines = [
+      [0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15],
+      [0,4,8,12],[1,5,9,13],[2,6,10,14],[3,7,11,15],
+      [0,5,10,15],[3,6,9,12]
+    ];
+    return lines.some(line => line.every(i => marked.has(i)));
   };
 
-  const addTaskToBlock = (blockId: string, taskId: string) => {
-    if (!schedule) return;
-    const updatedBlocks = schedule.blocks.map(block => 
-      block.id === blockId ? { ...block, tasks: [...block.tasks, taskId] } : block
-    );
-    onUpdateSchedule({ ...schedule, blocks: updatedBlocks });
-    setIsAddTaskOpen(false);
+  const markCell = (i: number) => {
+    if (!bingoBoard[i]) return;
+    const next = new Set(markedCells);
+    if (next.has(i)) next.delete(i); else next.add(i);
+    setMarkedCells(next);
   };
 
-  const handleChat = async () => {
-    if (!chatInput.trim()) return;
-    const newMessages = [...chatMessages, { role: 'user' as const, text: chatInput }];
-    setChatMessages(newMessages);
-    const input = chatInput;
-    setChatInput('');
+  const hasBingo = checkBingo(markedCells);
 
-    try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        setChatMessages([...newMessages, { role: 'ai', text: "Error: Gemini API key is not configured." }]);
-        return;
-      }
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `The user wants to modify their schedule or tasks. 
-        Current Schedule: ${JSON.stringify(schedule)}
-        User Input: ${input}
-        
-        Respond naturally and if they want to change something, provide the updated schedule in JSON format at the end of your message wrapped in <SCHEDULE>...</SCHEDULE>.`,
-      });
-
-      const text = response.text || '';
-      const scheduleMatch = text.match(/<SCHEDULE>(.*?)<\/SCHEDULE>/s);
-      if (scheduleMatch) {
-        try {
-          const newSchedule = JSON.parse(scheduleMatch[1]);
-          onUpdateSchedule(newSchedule);
-        } catch (e) {
-          console.error("Failed to parse updated schedule");
-        }
-      }
-      setChatMessages([...newMessages, { role: 'ai', text: text.replace(/<SCHEDULE>.*?<\/SCHEDULE>/s, '').trim() }]);
-    } catch (error: any) {
-      console.error("Chat failed:", error);
-      setChatMessages([...newMessages, { role: 'ai', text: "Sorry, I encountered an error. Please try again." }]);
-    }
-  };
+  // ---- Spinny Wheel ----
+  const wheelTasks = allTasks.filter(t => t.status === 'todo').slice(0, 8);
+  const [spinDeg, setSpinDeg] = useState(0);
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [wheelResult, setWheelResult] = useState<Task | null>(null);
+  const wheelColors = ['#f59e0b','#ef4444','#3b82f6','#10b981','#8b5cf6','#f97316','#06b6d4','#ec4899'];
 
   const spinWheel = () => {
-    if (tasks.length === 0) return;
+    if (isSpinning || wheelTasks.length === 0) return;
+    const extra = 1440 + Math.floor(Math.random() * 360);
+    const newDeg = spinDeg + extra;
+    setSpinDeg(newDeg);
     setIsSpinning(true);
+    setWheelResult(null);
     setTimeout(() => {
-      const randomTask = tasks[Math.floor(Math.random() * tasks.length)];
-      setSelectedTask(randomTask);
+      const n = wheelTasks.length;
+      const winnerIdx = Math.floor((newDeg % 360) / (360 / n)) % n;
+      setWheelResult(wheelTasks[winnerIdx]);
       setIsSpinning(false);
-    }, 2000);
+    }, 4000);
   };
 
-  if (!schedule) {
+  const renderWheelSegments = () => {
+    const n = wheelTasks.length;
+    if (n === 0) return <circle cx="150" cy="150" r="130" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" strokeWidth="2" />;
+    const cx = 150, cy = 150, r = 130;
+    const sliceAngle = (2 * Math.PI) / n;
     return (
-      <div className="flex flex-col items-center justify-center py-40 text-center">
-        <div className="w-20 h-20 glass-card rounded-3xl flex items-center justify-center mb-6">
-          <Zap className="text-white/40" size={40} />
-        </div>
-        <h2 className="text-2xl font-bold mb-2 text-white">No Schedule Yet</h2>
-        <p className="text-white/40 max-w-md">Add tasks to get started with your work day.</p>
-      </div>
+      <>
+        {wheelTasks.map((task, i) => {
+          const start = i * sliceAngle - Math.PI / 2;
+          const end = (i + 1) * sliceAngle - Math.PI / 2;
+          const x1 = cx + r * Math.cos(start), y1 = cy + r * Math.sin(start);
+          const x2 = cx + r * Math.cos(end), y2 = cy + r * Math.sin(end);
+          const largeArc = sliceAngle > Math.PI ? 1 : 0;
+          const mid = (start + end) / 2;
+          const tx = cx + r * 0.65 * Math.cos(mid);
+          const ty = cy + r * 0.65 * Math.sin(mid);
+          const label = task.title.length > 11 ? task.title.slice(0, 11) + '…' : task.title;
+          return (
+            <g key={task.id}>
+              <path
+                d={`M ${cx} ${cy} L ${x1.toFixed(1)} ${y1.toFixed(1)} A ${r} ${r} 0 ${largeArc} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z`}
+                fill={wheelColors[i % wheelColors.length]}
+                stroke="rgba(0,0,0,0.25)"
+                strokeWidth="2"
+              />
+              <text
+                x={tx.toFixed(1)}
+                y={ty.toFixed(1)}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize="8"
+                fontWeight="bold"
+                fill="white"
+                transform={`rotate(${((mid * 180) / Math.PI + 90).toFixed(1)}, ${tx.toFixed(1)}, ${ty.toFixed(1)})`}
+                style={{ userSelect: 'none', pointerEvents: 'none' }}
+              >
+                {label}
+              </text>
+            </g>
+          );
+        })}
+        <circle cx="150" cy="150" r="18" fill="rgba(0,0,0,0.6)" stroke="rgba(255,255,255,0.3)" strokeWidth="2" />
+      </>
     );
-  }
+  };
+
+  // ---- Pomodoro ----
+  const FOCUS_TIME = 25 * 60;
+  const BREAK_TIME = 5 * 60;
+  const [pomSec, setPomSec] = useState(FOCUS_TIME);
+  const [pomRunning, setPomRunning] = useState(false);
+  const [pomBreak, setPomBreak] = useState(false);
+  const [sessionTaskIds, setSessionTaskIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!pomRunning) return;
+    const interval = setInterval(() => {
+      setPomSec(s => {
+        if (s <= 1) { setPomRunning(false); return 0; }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [pomRunning]);
+
+  const resetPomodoro = () => { setPomRunning(false); setPomSec(FOCUS_TIME); setPomBreak(false); };
+  const switchPomMode = () => { const next = !pomBreak; setPomBreak(next); setPomSec(next ? BREAK_TIME : FOCUS_TIME); setPomRunning(false); };
+  const pomMin = String(Math.floor(pomSec / 60)).padStart(2, '0');
+  const pomSecStr = String(pomSec % 60).padStart(2, '0');
+
+  const toggleSessionTask = (taskId: string) => {
+    setSessionTaskIds(prev => prev.includes(taskId) ? prev.filter(id => id !== taskId) : [...prev, taskId]);
+  };
+
+  const tabs = [
+    { id: 'task-database' as const, label: 'Task DB' },
+    { id: 'overview' as const, label: 'Overview' },
+    { id: 'bingo' as const, label: 'Bingo' },
+    { id: 'wheel' as const, label: 'Wheel' },
+    { id: 'pomodoro' as const, label: 'Pomodoro' },
+  ];
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-4xl font-bold tracking-tight text-white">Work Mode</h1>
-        <div className="flex gap-2 bg-white/10 p-1 rounded-2xl border border-white/20 shadow-sm backdrop-blur-md">
-          <button 
-            onClick={() => setMode('overview')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${mode === 'overview' ? 'glass-button shadow-md' : 'text-white/40 hover:text-white'}`}
-          >
-            Overview
-          </button>
-          <button 
-            onClick={() => setMode('pomodoro')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${mode === 'pomodoro' ? 'glass-button shadow-md' : 'text-white/40 hover:text-white'}`}
-          >
-            Pomodoro
-          </button>
-          <button 
-            onClick={() => setMode('wheel')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${mode === 'wheel' ? 'glass-button shadow-md' : 'text-white/40 hover:text-white'}`}
-          >
-            Spinny Wheel
-          </button>
-          <button 
-            onClick={() => setMode('bingo')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${mode === 'bingo' ? 'glass-button shadow-md' : 'text-white/40 hover:text-white'}`}
-          >
-            Bingo
-          </button>
-          <button 
-            onClick={() => setMode('task-database')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${mode === 'task-database' ? 'glass-button shadow-md' : 'text-white/40 hover:text-white'}`}
-          >
-            Task Database
-          </button>
+        <div className="flex gap-1 bg-white/10 p-1 rounded-2xl border border-white/20 shadow-sm backdrop-blur-md">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setMode(tab.id)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${mode === tab.id ? 'glass-button shadow-md' : 'text-white/40 hover:text-white'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
       <AnimatePresence mode="wait">
+        {/* ---- TASK DATABASE ---- */}
+        {mode === 'task-database' && (
+          <motion.div key="task-database" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+            <TaskDatabaseTab allTasks={allTasks} projects={projects} onUpdateTasks={onUpdateTasks} />
+          </motion.div>
+        )}
+
+        {/* ---- OVERVIEW: tasks grouped by project ---- */}
         {mode === 'overview' && (
-          <motion.div 
-            key="overview"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="grid grid-cols-1 lg:grid-cols-3 gap-8"
-          >
-            <div className="lg:col-span-2 space-y-6">
-              <Card title="Today's Schedule">
-                <div className="space-y-4">
-                  {schedule.blocks && schedule.blocks.length > 0 ? schedule.blocks.map(block => (
-                    <div 
-                      key={block.id}
-                      onClick={() => setActiveBlock(block)}
-                      className={`p-4 rounded-2xl border transition-all cursor-pointer ${activeBlock?.id === block.id ? 'glass-button' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white'}`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                          <span className={`text-[10px] font-bold uppercase tracking-widest ${activeBlock?.id === block.id ? 'text-white/80' : 'text-white/40'}`}>
-                            {block.startTime} - {block.endTime}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest ${block.type === 'focus' ? 'bg-amber-500/20 text-amber-400' : block.type === 'meeting' ? 'bg-blue-500/20 text-blue-400' : 'bg-white/10 text-white/60'}`}>
-                            {block.type}
-                          </span>
+          <motion.div key="overview" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+            {allTasks.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <Zap className="text-white/20 mb-4" size={40} />
+                <p className="text-white/40">No tasks yet. Add tasks in the Task DB tab.</p>
+              </div>
+            )}
+            {projects.map(project => {
+              const pts = allTasks.filter(t => t.projectId === project.id);
+              if (pts.length === 0) return null;
+              const done = pts.filter(t => t.status === 'done').length;
+              return (
+                <Card key={project.id} title={`${project.title} — ${done}/${pts.length}`}>
+                  <div className="space-y-1">
+                    {pts.map(task => (
+                      <div key={task.id} onClick={() => toggleTask(task.id)}
+                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 cursor-pointer transition-all group">
+                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${task.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-white/20 group-hover:border-white/40'}`}>
+                          {task.status === 'done' && <Check size={11} className="text-white" />}
                         </div>
-                        <ChevronRight size={16} className={activeBlock?.id === block.id ? 'text-white/60' : 'text-white/20'} />
-                      </div>
-                      <h4 className="font-bold">{block.label}</h4>
-                      {activeBlock?.id === block.id && (
-                        <motion.div 
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          className="mt-4 pt-4 border-t border-white/10 space-y-3"
-                        >
-                          <div className="flex items-center justify-between">
-                            <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Assigned Tasks</p>
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); setIsAddTaskOpen(true); }}
-                              className="text-[10px] font-bold text-white/60 hover:text-white uppercase tracking-widest flex items-center gap-1"
-                            >
-                              <Plus size={10} />
-                              Add Task
-                            </button>
-                          </div>
-                          {block.tasks && block.tasks.map((taskId, i) => {
-                            const task = allTasks.find(t => t.id === taskId);
-                            return (
-                              <div key={i} className="flex items-center justify-between group/task">
-                                <div 
-                                  className="flex items-center gap-3 text-sm cursor-pointer"
-                                  onClick={(e) => { e.stopPropagation(); toggleTaskStatus(taskId); }}
-                                >
-                                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${task?.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-white/20 hover:border-white/40'}`}>
-                                    {task?.status === 'done' && <CheckSquare size={12} className="text-white" />}
-                                  </div>
-                                  <span className={task?.status === 'done' ? 'line-through text-white/40' : 'text-white/80'}>
-                                    {task?.title || taskId}
-                                  </span>
-                                </div>
-                                <button 
-                                  onClick={(e) => { e.stopPropagation(); removeTaskFromBlock(block.id, taskId); }}
-                                  className="opacity-0 group-hover/task:opacity-100 p-1 hover:bg-white/10 rounded transition-all"
-                                >
-                                  <Trash2 size={12} className="text-white/40 hover:text-red-400" />
-                                </button>
-                              </div>
-                            );
-                          })}
-
-                          {isAddTaskOpen && (
-                            <div className="mt-4 p-4 bg-white/5 rounded-2xl border border-white/10 space-y-4" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-between">
-                                <h5 className="text-xs font-bold uppercase tracking-widest text-white/60">Select Task</h5>
-                                <button onClick={() => setIsAddTaskOpen(false)} className="text-white/40 hover:text-white"><X size={14} /></button>
-                              </div>
-                              <div className="max-h-40 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                                {allTasks.filter(t => !block.tasks.includes(t.id)).map(task => (
-                                  <div 
-                                    key={task.id}
-                                    onClick={() => addTaskToBlock(block.id, task.id)}
-                                    className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs cursor-pointer transition-all border border-transparent hover:border-white/10 text-white/80"
-                                  >
-                                    {task.title}
-                                  </div>
-                                ))}
-                                <button 
-                                  className="w-full p-2 border border-dashed border-white/20 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-white/5 transition-all text-white/40 hover:text-white/60"
-                                  onClick={() => {
-                                    const newTitle = prompt("Enter new task title:");
-                                    if (newTitle) {
-                                      const newTask: Task = {
-                                        id: Math.random().toString(36).substr(2, 9),
-                                        title: newTitle,
-                                        status: 'todo',
-                                        urgency: 'medium',
-                                        isStrategic: false,
-                                        isFrog: false
-                                      };
-                                      onUpdateTasks([...allTasks, newTask]);
-                                      addTaskToBlock(block.id, newTask.id);
-                                    }
-                                  }}
-                                >
-                                  + Create New Task
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </motion.div>
-                      )}
-                    </div>
-                  )) : (
-                    <p className="text-xs text-white/40 italic text-center py-8">No tasks scheduled for today.</p>
-                  )}
-                </div>
-              </Card>
-            </div>
-
-            <div className="space-y-6">
-              <Card title="Assistant">
-                <div className="flex flex-col h-[400px]">
-                  <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
-                    {chatMessages.length === 0 && (
-                      <p className="text-xs text-white/40 italic text-center py-8">Ask me to reshuffle your schedule or change time blocks.</p>
-                    )}
-                    {chatMessages.map((msg, i) => (
-                      <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-white/20 backdrop-blur-md text-white border border-white/30' : 'bg-white/10 text-white border border-white/10'}`}>
-                          {msg.text}
-                        </div>
+                        <span className={`text-sm font-medium flex-1 ${task.status === 'done' ? 'line-through text-white/30' : 'text-white'}`}>{task.title}</span>
+                        {task.estimatedTime ? <span className="text-[10px] font-mono text-white/30">{task.estimatedTime}m</span> : null}
+                        <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ${task.urgency === 'high' ? 'bg-red-500/20 text-red-400' : task.urgency === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-white/10 text-white/40'}`}>
+                          {task.urgency}
+                        </span>
                       </div>
                     ))}
                   </div>
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      placeholder="Chat with AI..." 
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleChat()}
-                      className="flex-1 bg-white/10 border border-white/20 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30 transition-all"
-                    />
-                    <button 
-                      onClick={handleChat}
-                      className="p-3 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-xl hover:bg-white/30 transition-all shadow-lg shadow-black/20"
-                    >
-                      <MessageSquare size={18} />
-                    </button>
+                </Card>
+              );
+            })}
+            {(() => {
+              const ungrouped = allTasks.filter(t => !t.projectId);
+              if (ungrouped.length === 0) return null;
+              return (
+                <Card title="No Project">
+                  <div className="space-y-1">
+                    {ungrouped.map(task => (
+                      <div key={task.id} onClick={() => toggleTask(task.id)}
+                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 cursor-pointer transition-all group">
+                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${task.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-white/20 group-hover:border-white/40'}`}>
+                          {task.status === 'done' && <Check size={11} className="text-white" />}
+                        </div>
+                        <span className={`text-sm font-medium flex-1 ${task.status === 'done' ? 'line-through text-white/30' : 'text-white'}`}>{task.title}</span>
+                        {task.estimatedTime ? <span className="text-[10px] font-mono text-white/30">{task.estimatedTime}m</span> : null}
+                      </div>
+                    ))}
                   </div>
-                </div>
-              </Card>
-            </div>
+                </Card>
+              );
+            })()}
           </motion.div>
         )}
 
-        {mode === 'pomodoro' && (
-          <motion.div 
-            key="pomodoro"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.05 }}
-            className="flex flex-col items-center justify-center py-12 space-y-12"
-          >
-            <div className="relative w-72 h-72 flex items-center justify-center">
-              <div className="absolute inset-0 border-8 border-white/10 rounded-full" />
-              <div className="absolute inset-0 border-8 border-white rounded-full border-t-transparent animate-spin-slow" />
-              <div className="text-center">
-                <span className="text-7xl font-mono font-bold tracking-tighter text-white">25:00</span>
-                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/40 mt-2">Focus Time</p>
-              </div>
+        {/* ---- BINGO: 4×4 board from task DB ---- */}
+        {mode === 'bingo' && (
+          <motion.div key="bingo" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="flex flex-col items-center py-8 space-y-8">
+            <div className="text-center space-y-1">
+              <h2 className="text-3xl font-bold text-white">Task Bingo</h2>
+              <p className="text-white/40 text-sm">Click tasks to mark them. Get a row, column, or diagonal to win!</p>
+              {hasBingo && (
+                <motion.p initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-2xl font-bold text-amber-400 pt-1">🎉 BINGO!</motion.p>
+              )}
             </div>
-
-            <div className="flex gap-4">
-              <button className="px-12 py-4 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-2xl font-bold hover:bg-white/30 transition-all shadow-xl shadow-black/20">
-                Start Timer
-              </button>
-              <button className="px-8 py-4 bg-white/10 text-white rounded-2xl font-bold hover:bg-white/20 transition-all border border-white/10">
-                Reset
-              </button>
-            </div>
-
-            <div className="max-w-md w-full space-y-4">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-white/40 text-center">Tasks for this block</h3>
-              {(activeBlock ? activeBlock.tasks.map(id => allTasks.find(t => t.id === id)).filter(Boolean) : allTasks.slice(0, 3)).map(task => (
-                <div 
-                  key={task!.id} 
-                  onClick={() => toggleTaskStatus(task!.id)}
-                  className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-4 shadow-sm cursor-pointer hover:bg-white/10 transition-all"
+            <div className="grid grid-cols-4 gap-3">
+              {bingoBoard.map((task, i) => (
+                <button
+                  key={i}
+                  onClick={() => markCell(i)}
+                  disabled={!task}
+                  className={`w-28 h-28 rounded-2xl p-3 flex flex-col items-center justify-center text-center transition-all border text-xs font-bold leading-tight ${
+                    markedCells.has(i)
+                      ? 'bg-emerald-500/25 border-emerald-500/50 text-emerald-300'
+                      : task
+                      ? 'bg-white/5 border-white/10 hover:bg-white/10 text-white/80 cursor-pointer'
+                      : 'bg-white/5 border-white/5 text-white/20 cursor-default'
+                  }`}
                 >
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${task!.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-white/20'}`}>
-                    {task!.status === 'done' && <CheckSquare size={12} className="text-white" />}
-                  </div>
-                  <span className={`font-medium text-white ${task!.status === 'done' ? 'line-through text-white/40' : ''}`}>{task!.title}</span>
-                </div>
+                  {markedCells.has(i) && <Check size={16} className="mb-1 text-emerald-400 flex-shrink-0" />}
+                  <span className="line-clamp-3">{task?.title || '—'}</span>
+                </button>
               ))}
             </div>
-          </motion.div>
-        )}
-
-        {mode === 'wheel' && (
-          <motion.div 
-            key="wheel"
-            initial={{ opacity: 0, rotate: -10 }}
-            animate={{ opacity: 1, rotate: 0 }}
-            exit={{ opacity: 0, rotate: 10 }}
-            className="flex flex-col items-center justify-center py-12 space-y-12"
-          >
-            <div className={`relative w-80 h-80 rounded-full border-8 border-white/20 flex items-center justify-center transition-all duration-[2000ms] ease-out ${isSpinning ? 'rotate-[1080deg]' : ''} backdrop-blur-md`}>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-1 h-full bg-white/10 absolute" />
-                <div className="h-1 w-full bg-white/10 absolute" />
-                <div className="w-1 h-full bg-white/10 absolute rotate-45" />
-                <div className="w-1 h-full bg-white/10 absolute -rotate-45" />
-              </div>
-              <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-full z-10 flex items-center justify-center border-4 border-white/30">
-                <Zap size={24} className="text-white" />
-              </div>
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[15px] border-l-transparent border-r-[15px] border-r-transparent border-t-[30px] border-t-white/80 z-20" />
-            </div>
-
-            <div className="text-center space-y-6">
-              {selectedTask ? (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Your Assigned Task</p>
-                  <h3 className="text-3xl font-bold tracking-tight text-white">{selectedTask.title}</h3>
-                </motion.div>
-              ) : (
-                <p className="text-white/60">Spin the wheel to get a random task assigned.</p>
-              )}
-              <button 
-                onClick={spinWheel}
-                disabled={isSpinning}
-                className="px-16 py-5 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-full font-bold text-lg hover:bg-white/30 transition-all shadow-2xl shadow-black/20 flex items-center gap-3"
-              >
-                <RefreshCw size={24} className={isSpinning ? 'animate-spin' : ''} />
-                {isSpinning ? 'Spinning...' : 'Spin the Wheel'}
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {mode === 'bingo' && (
-          <motion.div 
-            key="bingo"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="flex flex-col items-center justify-center py-12 space-y-8"
-          >
-            <div className="text-center space-y-2">
-              <h2 className="text-3xl font-bold tracking-tight text-white">Task Bingo</h2>
-              <p className="text-white/60">Complete a line to win the morning!</p>
-            </div>
-
-            <div className="grid grid-cols-5 gap-2 bg-white/5 p-2 rounded-3xl border border-white/10 backdrop-blur-md">
-              {[...Array(25)].map((_, i) => {
-                const task = tasks && tasks.length > 0 ? tasks[i % tasks.length] : null;
-                return (
-                  <div 
-                    key={i}
-                    className={`w-24 h-24 rounded-2xl p-2 flex flex-col items-center justify-center text-center cursor-pointer transition-all border border-white/10 ${i === 12 ? 'bg-white/20 backdrop-blur-md text-white border-white/40' : 'bg-white/5 text-white hover:bg-white/10'}`}
-                  >
-                    {i === 12 ? (
-                      <span className="text-[10px] font-bold uppercase tracking-widest">FREE SPACE</span>
-                    ) : (
-                      <span className="text-[10px] font-bold leading-tight line-clamp-3">{task?.title || 'Rest'}</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <button className="px-12 py-4 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-2xl font-bold hover:bg-white/30 transition-all shadow-xl shadow-black/20">
+            <button
+              onClick={() => { setBingoBoard(makeBingoBoard()); setMarkedCells(new Set()); }}
+              className="flex items-center gap-2 px-8 py-3 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-2xl font-bold hover:bg-white/30 transition-all"
+            >
+              <RefreshCw size={16} />
               Shuffle Board
             </button>
           </motion.div>
         )}
 
-        {mode === 'task-database' && (
-          <motion.div 
-            key="task-database"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-          >
-            <TaskDatabaseTab 
-              allTasks={allTasks} 
-              projects={projects} 
-              onUpdateTasks={onUpdateTasks} 
-            />
+        {/* ---- SPINNY WHEEL: colored SVG segments ---- */}
+        {mode === 'wheel' && (
+          <motion.div key="wheel" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="flex flex-col items-center py-8 space-y-8">
+            <div className="relative">
+              {/* Fixed pointer at top */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 z-10 w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-t-[20px] border-t-white drop-shadow-lg" />
+              <svg
+                width="300"
+                height="300"
+                style={{
+                  transform: `rotate(${spinDeg}deg)`,
+                  transition: isSpinning ? 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)' : 'none',
+                  filter: 'drop-shadow(0 4px 24px rgba(0,0,0,0.4))',
+                }}
+              >
+                {renderWheelSegments()}
+              </svg>
+            </div>
+            {wheelTasks.length === 0 && (
+              <p className="text-white/40 text-sm">Add todo tasks to the database to use the wheel.</p>
+            )}
+            {wheelResult && !isSpinning && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-center">
+                <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1">You got</p>
+                <h3 className="text-2xl font-bold text-white">{wheelResult.title}</h3>
+              </motion.div>
+            )}
+            <button
+              onClick={spinWheel}
+              disabled={isSpinning || wheelTasks.length === 0}
+              className="flex items-center gap-3 px-12 py-4 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-full font-bold text-lg hover:bg-white/30 transition-all shadow-2xl shadow-black/20 disabled:opacity-50"
+            >
+              <RefreshCw size={20} className={isSpinning ? 'animate-spin' : ''} />
+              {isSpinning ? 'Spinning…' : 'Spin the Wheel'}
+            </button>
+          </motion.div>
+        )}
+
+        {/* ---- POMODORO: working timer + task assignment ---- */}
+        {mode === 'pomodoro' && (
+          <motion.div key="pomodoro" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Timer side */}
+            <div className="flex flex-col items-center justify-center py-8 space-y-8">
+              <div className="flex gap-2 bg-white/10 p-1 rounded-2xl border border-white/20">
+                <button onClick={() => { if (pomBreak) switchPomMode(); }} className={`px-5 py-2 rounded-xl text-xs font-bold transition-all ${!pomBreak ? 'glass-button' : 'text-white/40 hover:text-white'}`}>Focus</button>
+                <button onClick={() => { if (!pomBreak) switchPomMode(); }} className={`px-5 py-2 rounded-xl text-xs font-bold transition-all ${pomBreak ? 'glass-button' : 'text-white/40 hover:text-white'}`}>Break</button>
+              </div>
+              <div className="relative w-56 h-56 flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full border-8 border-white/10" />
+                <div className={`absolute inset-0 rounded-full border-8 border-t-transparent ${pomBreak ? 'border-emerald-400' : 'border-white'} ${pomRunning ? 'animate-spin-slow' : ''}`} />
+                <span className="text-6xl font-mono font-bold tracking-tighter text-white z-10">{pomMin}:{pomSecStr}</span>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setPomRunning(r => !r)}
+                  className="px-10 py-3 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-2xl font-bold hover:bg-white/30 transition-all flex items-center gap-2"
+                >
+                  {pomRunning ? <Pause size={18} /> : <Play size={18} />}
+                  {pomRunning ? 'Pause' : 'Start'}
+                </button>
+                <button onClick={resetPomodoro} className="px-6 py-3 bg-white/10 text-white rounded-2xl font-bold hover:bg-white/20 transition-all border border-white/10 flex items-center gap-2">
+                  <RotateCcw size={16} />
+                  Reset
+                </button>
+              </div>
+              {sessionTaskIds.length > 0 && (
+                <div className="w-full max-w-xs space-y-2">
+                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest text-center">Session tasks</p>
+                  {sessionTaskIds.map(id => {
+                    const task = allTasks.find(t => t.id === id);
+                    if (!task) return null;
+                    return (
+                      <div key={id} onClick={() => toggleTask(id)}
+                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 cursor-pointer group border border-white/10">
+                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${task.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-white/20 group-hover:border-white/40'}`}>
+                          {task.status === 'done' && <Check size={11} className="text-white" />}
+                        </div>
+                        <span className={`text-sm font-medium flex-1 ${task.status === 'done' ? 'line-through text-white/30' : 'text-white'}`}>{task.title}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            {/* Task picker side */}
+            <Card title="Assign Tasks to Session">
+              <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">Select tasks to focus on</p>
+                {allTasks.filter(t => t.status === 'todo').map(task => (
+                  <div key={task.id} onClick={() => toggleSessionTask(task.id)}
+                    className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border ${sessionTaskIds.includes(task.id) ? 'bg-white/15 border-white/30' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
+                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${sessionTaskIds.includes(task.id) ? 'bg-white/80 border-white/80' : 'border-white/20'}`}>
+                      {sessionTaskIds.includes(task.id) && <Check size={11} className="text-black" />}
+                    </div>
+                    <span className="text-sm text-white font-medium flex-1">{task.title}</span>
+                    {task.estimatedTime ? <span className="text-[10px] font-mono text-white/30">{task.estimatedTime}m</span> : null}
+                    {task.projectId && <span className="text-[8px] font-bold text-white/30 uppercase tracking-widest">{projects.find(p => p.id === task.projectId)?.title}</span>}
+                  </div>
+                ))}
+                {allTasks.filter(t => t.status === 'todo').length === 0 && (
+                  <p className="text-white/30 text-sm italic text-center py-8">No todo tasks. Add tasks in the Task DB tab.</p>
+                )}
+              </div>
+            </Card>
           </motion.div>
         )}
       </AnimatePresence>
@@ -3400,12 +3335,9 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                 >
-                  <WorkMode 
-                    tasks={tasks} 
+                  <WorkMode
                     allTasks={allTasks}
                     projects={projects}
-                    schedule={schedule} 
-                    onUpdateSchedule={setSchedule}
                     onUpdateTasks={setAllTasks}
                   />
                 </motion.div>

@@ -93,6 +93,26 @@ interface DailySchedule {
   summary: string;
 }
 
+interface CalendarEvent {
+  id: string;
+  title: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:MM AM/PM
+  endTime: string; // HH:MM AM/PM
+  type: 'work' | 'social' | 'health' | 'other' | 'workout';
+}
+
+interface Workout {
+  id: string;
+  title: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:MM (24h)
+  endTime: string; // HH:MM (24h)
+  type: string;
+  duration: number;
+  completed: boolean;
+}
+
 interface Category {
   id: string;
   name: string;
@@ -1272,13 +1292,15 @@ const WorkMode = ({
   allTasks,
   schedule, 
   onUpdateSchedule,
-  onUpdateTasks
+  onUpdateTasks,
+  onStartCheckIn
 }: { 
   tasks: Task[], 
   allTasks: Task[],
   schedule: DailySchedule | null, 
   onUpdateSchedule: (s: DailySchedule) => void,
-  onUpdateTasks: (t: Task[]) => void
+  onUpdateTasks: (t: Task[]) => void,
+  onStartCheckIn: () => void
 }) => {
   const [mode, setMode] = useState<'overview' | 'pomodoro' | 'wheel' | 'bingo'>('overview');
   const [activeBlock, setActiveBlock] = useState<TimeBlock | null>(null);
@@ -1363,7 +1385,14 @@ const WorkMode = ({
           <Zap className="text-zinc-400" size={40} />
         </div>
         <h2 className="text-2xl font-bold mb-2">No Schedule Yet</h2>
-        <p className="text-zinc-500 max-w-md">Complete your morning check-in to generate your AI-optimized work schedule.</p>
+        <p className="text-zinc-500 max-w-md mb-8">Complete your morning check-in to generate your AI-optimized work schedule.</p>
+        <button 
+          onClick={onStartCheckIn}
+          className="px-8 py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-200 flex items-center gap-2"
+        >
+          <Zap size={18} />
+          Start Morning Check-in
+        </button>
       </div>
     );
   }
@@ -1412,7 +1441,7 @@ const WorkMode = ({
             <div className="lg:col-span-2 space-y-6">
               <Card title="Today's Schedule">
                 <div className="space-y-4">
-                  {schedule.blocks.map(block => (
+                  {schedule.blocks && schedule.blocks.length > 0 ? schedule.blocks.map(block => (
                     <div 
                       key={block.id}
                       onClick={() => setActiveBlock(block)}
@@ -1446,7 +1475,7 @@ const WorkMode = ({
                               Add Task
                             </button>
                           </div>
-                          {block.tasks.map((taskId, i) => {
+                          {block.tasks && block.tasks.map((taskId, i) => {
                             const task = allTasks.find(t => t.id === taskId);
                             return (
                               <div key={i} className="flex items-center justify-between group/task">
@@ -1513,7 +1542,9 @@ const WorkMode = ({
                         </motion.div>
                       )}
                     </div>
-                  ))}
+                  )) : (
+                    <p className="text-xs text-zinc-400 italic text-center py-8">No tasks scheduled for today.</p>
+                  )}
                 </div>
               </Card>
             </div>
@@ -1656,7 +1687,7 @@ const WorkMode = ({
 
             <div className="grid grid-cols-5 gap-2 bg-zinc-100 p-2 rounded-3xl border border-black/5">
               {[...Array(25)].map((_, i) => {
-                const task = tasks[i % tasks.length];
+                const task = tasks && tasks.length > 0 ? tasks[i % tasks.length] : null;
                 return (
                   <div 
                     key={i}
@@ -1800,8 +1831,28 @@ const ProjectsTab = () => {
   );
 };
 
-const CalendarTab = ({ schedule }: { schedule: DailySchedule | null }) => {
+const CalendarTab = ({ 
+  schedule, 
+  events, 
+  onAddEvent,
+  onUpdateEvent,
+  onDeleteEvent
+}: { 
+  schedule: DailySchedule | null, 
+  events: CalendarEvent[],
+  onAddEvent: (event: CalendarEvent) => void,
+  onUpdateEvent: (event: CalendarEvent) => void,
+  onDeleteEvent: (id: string) => void
+}) => {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newEvent, setNewEvent] = useState({
+    title: '',
+    startTime: '09:00',
+    endTime: '10:00',
+    type: 'work' as const
+  });
+
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   
   const getWeekDays = (date: Date) => {
@@ -1819,8 +1870,69 @@ const CalendarTab = ({ schedule }: { schedule: DailySchedule | null }) => {
   const weekDays = getWeekDays(currentDate);
 
   const timeToMinutes = (timeStr: string) => {
+    if (!timeStr) return 0;
+    // Handle AM/PM format
+    if (timeStr.includes('AM') || timeStr.includes('PM')) {
+      const [time, modifier] = timeStr.split(' ');
+      let [hours, minutes] = time.split(':').map(Number);
+      if (hours === 12) hours = 0;
+      if (modifier === 'PM') hours += 12;
+      return hours * 60 + (minutes || 0);
+    }
+    // Handle 24h format
     const [hours, minutes] = timeStr.split(':').map(Number);
-    return hours * 60 + minutes;
+    return (hours || 0) * 60 + (minutes || 0);
+  };
+
+  const minutesToTime = (minutes: number) => {
+    let h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+  };
+
+  const handleAddEvent = () => {
+    if (!newEvent.title) return;
+    
+    const formatTime = (time: string) => {
+      let [h, m] = time.split(':').map(Number);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12;
+      h = h ? h : 12;
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+    };
+
+    onAddEvent({
+      id: Math.random().toString(36).substr(2, 9),
+      title: newEvent.title,
+      date: currentDate.toISOString().split('T')[0],
+      startTime: formatTime(newEvent.startTime),
+      endTime: formatTime(newEvent.endTime),
+      type: newEvent.type
+    });
+    setIsAddModalOpen(false);
+    setNewEvent({ title: '', startTime: '09:00', endTime: '10:00', type: 'work' });
+  };
+
+  const handleDragEnd = (event: CalendarEvent, info: any, day: Date) => {
+    const deltaY = info.offset.y;
+    const deltaMinutes = Math.round(deltaY / 60) * 60; // Snap to hour
+    
+    const startMin = timeToMinutes(event.startTime);
+    const endMin = timeToMinutes(event.endTime);
+    const duration = endMin - startMin;
+    
+    const newStartMin = Math.max(0, Math.min(1440 - duration, startMin + deltaMinutes));
+    const newEndMin = newStartMin + duration;
+    
+    onUpdateEvent({
+      ...event,
+      date: day.toISOString().split('T')[0],
+      startTime: minutesToTime(newStartMin),
+      endTime: minutesToTime(newEndMin)
+    });
   };
 
   return (
@@ -1848,11 +1960,95 @@ const CalendarTab = ({ schedule }: { schedule: DailySchedule | null }) => {
             {currentDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
           </span>
         </div>
-        <button className="bg-zinc-900 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-zinc-800 transition-colors shadow-lg shadow-zinc-200">
-          <Plus size={18} />
-          <span>Connect Google Calendar</span>
-        </button>
+        <div className="flex gap-4">
+          <button 
+            onClick={() => setIsAddModalOpen(true)}
+            className="bg-zinc-900 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-zinc-800 transition-colors shadow-lg shadow-zinc-200"
+          >
+            <Plus size={18} />
+            <span>Add Event</span>
+          </button>
+          <button className="bg-white text-zinc-600 border border-black/5 px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-zinc-50 transition-colors">
+            <Calendar size={18} />
+            <span>Connect Google Calendar</span>
+          </button>
+        </div>
       </div>
+
+      <AnimatePresence>
+        {isAddModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/20 backdrop-blur-sm flex items-center justify-center p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-white rounded-[32px] p-8 w-full max-w-md shadow-2xl border border-black/5"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold tracking-tight">Add Event</h2>
+                <button onClick={() => setIsAddModalOpen(false)} className="p-2 hover:bg-zinc-100 rounded-full">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Event Title</label>
+                  <input 
+                    type="text" 
+                    value={newEvent.title}
+                    onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+                    placeholder="What's happening?"
+                    className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Start Time</label>
+                    <input 
+                      type="time" 
+                      value={newEvent.startTime}
+                      onChange={(e) => setNewEvent({ ...newEvent, startTime: e.target.value })}
+                      className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">End Time</label>
+                    <input 
+                      type="time" 
+                      value={newEvent.endTime}
+                      onChange={(e) => setNewEvent({ ...newEvent, endTime: e.target.value })}
+                      className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Category</label>
+                  <select 
+                    value={newEvent.type}
+                    onChange={(e) => setNewEvent({ ...newEvent, type: e.target.value as any })}
+                    className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                  >
+                    <option value="work">Work</option>
+                    <option value="social">Social</option>
+                    <option value="health">Health</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <button 
+                  onClick={handleAddEvent}
+                  className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-bold mt-4 hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-200"
+                >
+                  Create Event
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="bg-white rounded-[40px] border border-black/5 shadow-sm overflow-hidden">
         <div className="grid grid-cols-[80px_repeat(7,1fr)] border-b border-zinc-100">
@@ -1884,8 +2080,8 @@ const CalendarTab = ({ schedule }: { schedule: DailySchedule | null }) => {
                   <div key={i} className="h-[60px] border-b border-zinc-50/50" />
                 ))}
 
-                {/* Render Schedule Blocks only for today for now as it's a daily schedule */}
-                {day.toDateString() === new Date().toDateString() && schedule?.blocks.map((block, i) => {
+                {/* Render Schedule Blocks only for today */}
+                {day.toDateString() === new Date().toDateString() && schedule?.blocks && schedule.blocks.map((block, i) => {
                   const startMin = timeToMinutes(block.startTime);
                   const endMin = timeToMinutes(block.endTime);
                   const duration = endMin - startMin;
@@ -1894,7 +2090,7 @@ const CalendarTab = ({ schedule }: { schedule: DailySchedule | null }) => {
 
                   return (
                     <div 
-                      key={i}
+                      key={`block-${i}`}
                       className={`absolute left-1 right-1 p-2 rounded-xl border shadow-sm z-10 overflow-hidden ${block.type === 'focus' ? 'bg-amber-50 border-amber-100 text-amber-900' : block.type === 'meeting' ? 'bg-blue-50 border-blue-100 text-blue-900' : 'bg-zinc-50 border-zinc-100 text-zinc-900'}`}
                       style={{ top: `${top}px`, height: `${height}px` }}
                     >
@@ -1905,11 +2101,366 @@ const CalendarTab = ({ schedule }: { schedule: DailySchedule | null }) => {
                     </div>
                   );
                 })}
+
+                {/* Render Custom Events */}
+                {events.filter(e => e.date === day.toISOString().split('T')[0]).map((event, i) => {
+                  const startMin = timeToMinutes(event.startTime);
+                  const endMin = timeToMinutes(event.endTime);
+                  const duration = endMin - startMin;
+                  const top = startMin;
+                  const height = duration;
+
+                  return (
+                    <motion.div 
+                      key={event.id}
+                      drag="y"
+                      dragMomentum={false}
+                      onDragEnd={(_, info) => handleDragEnd(event, info, day)}
+                      className={`absolute left-1 right-1 p-2 rounded-xl border shadow-sm z-20 overflow-hidden cursor-grab active:cursor-grabbing group ${event.type === 'work' ? 'bg-zinc-900 text-white border-zinc-900' : event.type === 'health' ? 'bg-emerald-50 border-emerald-100 text-emerald-900' : event.type === 'social' ? 'bg-blue-50 border-blue-100 text-blue-900' : event.type === 'workout' ? 'bg-amber-900 text-white border-amber-900' : 'bg-zinc-50 border-zinc-100 text-zinc-900'}`}
+                      style={{ top: `${top}px`, height: `${height}px` }}
+                    >
+                      <div className="flex flex-col h-full relative">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('Delete this event?')) onDeleteEvent(event.id);
+                          }}
+                          className="absolute top-0 right-0 p-1 bg-white/10 hover:bg-white/20 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                        <span className={`text-[8px] font-bold uppercase tracking-widest mb-0.5 ${['work', 'workout'].includes(event.type) ? 'text-white/60' : 'opacity-60'}`}>{event.startTime}</span>
+                        <h4 className="text-[10px] font-bold leading-tight line-clamp-2">{event.title}</h4>
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </div>
             ))}
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+const WorkoutPlannerTab = ({ 
+  workouts, 
+  onAddWorkout,
+  onUpdateWorkout,
+  onDeleteWorkout
+}: { 
+  workouts: Workout[], 
+  onAddWorkout: (w: Workout) => void,
+  onUpdateWorkout: (w: Workout) => void,
+  onDeleteWorkout: (id: string) => void
+}) => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
+  const [newWorkout, setNewWorkout] = useState({
+    title: '',
+    type: 'Strength',
+    duration: 45,
+    startTime: '08:00',
+    endTime: '08:45'
+  });
+
+  useEffect(() => {
+    if (editingWorkout) {
+      setNewWorkout({
+        title: editingWorkout.title,
+        type: editingWorkout.type,
+        duration: editingWorkout.duration,
+        startTime: editingWorkout.startTime,
+        endTime: editingWorkout.endTime
+      });
+      setSelectedDay(new Date(editingWorkout.date));
+      setIsAddModalOpen(true);
+    }
+  }, [editingWorkout]);
+
+  const handleAddWorkout = () => {
+    if (!selectedDay || !newWorkout.title) return;
+    
+    const dateStr = selectedDay.toISOString().split('T')[0];
+    
+    if (editingWorkout) {
+      onUpdateWorkout({
+        ...editingWorkout,
+        title: newWorkout.title,
+        date: dateStr,
+        type: newWorkout.type,
+        duration: newWorkout.duration,
+        startTime: newWorkout.startTime,
+        endTime: newWorkout.endTime
+      });
+    } else {
+      onAddWorkout({
+        id: Math.random().toString(36).substr(2, 9),
+        title: newWorkout.title,
+        date: dateStr,
+        type: newWorkout.type,
+        duration: newWorkout.duration,
+        startTime: newWorkout.startTime,
+        endTime: newWorkout.endTime,
+        completed: false
+      });
+    }
+    
+    setIsAddModalOpen(false);
+    setEditingWorkout(null);
+    setNewWorkout({ title: '', type: 'Strength', duration: 45, startTime: '08:00', endTime: '08:45' });
+  };
+
+  const handleDeleteWorkout = (id: string) => {
+    if (confirm('Are you sure you want to delete this workout?')) {
+      onDeleteWorkout(id);
+    }
+  };
+
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    
+    const days = [];
+    // Pad start
+    const startPadding = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+    for (let i = 0; i < startPadding; i++) {
+      days.push(null);
+    }
+    
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      days.push(new Date(year, month, i));
+    }
+    
+    return days;
+  };
+
+  const monthDays = getDaysInMonth(currentDate);
+  const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <h1 className="text-4xl font-bold tracking-tight text-zinc-900">Workout Planner</h1>
+          <div className="flex gap-2 bg-white p-1 rounded-xl border border-black/5 shadow-sm">
+            <button onClick={() => {
+              const d = new Date(currentDate);
+              d.setMonth(d.getMonth() - 1);
+              setCurrentDate(d);
+            }} className="p-2 hover:bg-zinc-50 rounded-lg transition-colors">
+              <ChevronLeft size={16} />
+            </button>
+            <button onClick={() => {
+              const d = new Date(currentDate);
+              d.setMonth(d.getMonth() + 1);
+              setCurrentDate(d);
+            }} className="p-2 hover:bg-zinc-50 rounded-lg transition-colors">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          <span className="text-sm font-bold text-zinc-400 uppercase tracking-widest">
+            {currentDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2">
+          <div className="bg-white rounded-[40px] border border-black/5 shadow-sm overflow-hidden p-8">
+            <div className="grid grid-cols-7 mb-4">
+              {weekDays.map(day => (
+                <div key={day} className="text-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest py-2">
+                  {day}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-2">
+              {monthDays.map((day, i) => {
+                if (!day) return <div key={`pad-${i}`} className="aspect-square" />;
+                
+                const dateStr = day.toISOString().split('T')[0];
+                const dayWorkouts = workouts.filter(w => w.date === dateStr);
+                const isToday = day.toDateString() === new Date().toDateString();
+                
+                return (
+                  <div 
+                    key={i}
+                    onClick={() => {
+                      setSelectedDay(day);
+                      setIsAddModalOpen(true);
+                    }}
+                    className={`aspect-square p-2 rounded-2xl border transition-all cursor-pointer group relative ${isToday ? 'bg-zinc-900 border-zinc-900' : 'bg-zinc-50 border-black/5 hover:bg-white hover:shadow-md'}`}
+                  >
+                    <span className={`text-xs font-bold ${isToday ? 'text-white' : 'text-zinc-400'}`}>{day.getDate()}</span>
+                    <div className="mt-1 space-y-1">
+                      {dayWorkouts.map((w, idx) => (
+                        <div key={idx} className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md truncate ${isToday ? 'bg-white/20 text-white' : 'bg-zinc-900 text-white'}`}>
+                          {w.title}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Plus size={12} className={isToday ? 'text-white' : 'text-zinc-400'} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <Card title="Upcoming Workouts">
+            <div className="space-y-4">
+              {workouts.filter(w => new Date(w.date) >= new Date(new Date().setHours(0,0,0,0))).sort((a,b) => a.date.localeCompare(b.date)).slice(0, 5).map(w => (
+                <div key={w.id} className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-black/5 group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
+                      <Activity size={16} className="text-zinc-900" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold">{w.title}</h4>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{w.date} • {w.startTime} • {w.duration}m</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => setEditingWorkout(w)}
+                      className="p-2 hover:bg-zinc-200 rounded-lg text-zinc-400 hover:text-zinc-900 transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <Settings size={14} />
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteWorkout(w.id)}
+                      className="p-2 hover:bg-red-50 rounded-lg text-zinc-400 hover:text-red-600 transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                    <div className={`w-2 h-2 rounded-full ${w.completed ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
+                  </div>
+                </div>
+              ))}
+              {workouts.length === 0 && (
+                <p className="text-xs text-zinc-400 italic text-center py-4">No workouts planned yet.</p>
+              )}
+            </div>
+          </Card>
+
+          <Card title="Monthly Stats">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-zinc-500 font-medium">Total Workouts</span>
+                <span className="text-lg font-bold">{workouts.length}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-zinc-500 font-medium">Completed</span>
+                <span className="text-lg font-bold text-emerald-600">
+                  {workouts.filter(w => w.completed).length}
+                </span>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {isAddModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/20 backdrop-blur-sm flex items-center justify-center p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-white rounded-[32px] p-8 w-full max-w-md shadow-2xl border border-black/5"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold tracking-tight">{editingWorkout ? 'Edit Workout' : 'Plan Workout'}</h2>
+                <button onClick={() => {
+                  setIsAddModalOpen(false);
+                  setEditingWorkout(null);
+                }} className="p-2 hover:bg-zinc-100 rounded-full">
+                  <X size={20} />
+                </button>
+              </div>
+              <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-6">
+                For {selectedDay?.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+              </p>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Workout Title</label>
+                  <input 
+                    type="text" 
+                    value={newWorkout.title}
+                    onChange={(e) => setNewWorkout({ ...newWorkout, title: e.target.value })}
+                    placeholder="e.g. Upper Body Power"
+                    className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Start Time</label>
+                    <input 
+                      type="time" 
+                      value={newWorkout.startTime}
+                      onChange={(e) => setNewWorkout({ ...newWorkout, startTime: e.target.value })}
+                      className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">End Time</label>
+                    <input 
+                      type="time" 
+                      value={newWorkout.endTime}
+                      onChange={(e) => setNewWorkout({ ...newWorkout, endTime: e.target.value })}
+                      className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Type</label>
+                    <select 
+                      value={newWorkout.type}
+                      onChange={(e) => setNewWorkout({ ...newWorkout, type: e.target.value })}
+                      className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                    >
+                      <option>Strength</option>
+                      <option>Cardio</option>
+                      <option>Yoga</option>
+                      <option>HIIT</option>
+                      <option>Mobility</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Duration (min)</label>
+                    <input 
+                      type="number" 
+                      value={newWorkout.duration}
+                      onChange={(e) => setNewWorkout({ ...newWorkout, duration: parseInt(e.target.value) })}
+                      className="w-full bg-zinc-50 border border-black/5 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                    />
+                  </div>
+                </div>
+                <button 
+                  onClick={handleAddWorkout}
+                  className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-bold mt-4 hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-200"
+                >
+                  {editingWorkout ? 'Update Workout' : 'Plan Workout'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -2185,7 +2736,7 @@ const Card = ({ title, children, className = "" }: { title?: string, children: R
 // --- Main App ---
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'vision' | 'projects' | 'work' | 'calendar' | 'quests' | 'knowledge' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'vision' | 'projects' | 'work' | 'calendar' | 'quests' | 'knowledge' | 'workout' | 'settings'>('overview');
   const [interests] = useState(['Artificial Intelligence', 'Productivity', 'Digital Health']);
   const [dailyPulseData, setDailyPulseData] = useState<DailyPulseData>({
     energy: 0,
@@ -2201,7 +2752,87 @@ export default function App() {
     { id: 't3', title: 'Review Analytics', duration: 30, urgency: 'low', isStrategic: false, isFrog: false, status: 'todo' },
   ]);
   const [schedule, setSchedule] = useState<DailySchedule | null>(null);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([
+    { id: 'e1', title: 'Deep Work: App Architecture', date: new Date().toISOString().split('T')[0], startTime: '09:00 AM', endTime: '11:30 AM', type: 'work' },
+    { id: 'e2', title: 'Lunch with Sarah', date: new Date().toISOString().split('T')[0], startTime: '12:30 PM', endTime: '01:30 PM', type: 'social' },
+    { id: 'e3', title: 'Product Review', date: new Date().toISOString().split('T')[0], startTime: '02:00 PM', endTime: '03:00 PM', type: 'work' },
+    { id: 'e4', title: 'Gym Session', date: new Date().toISOString().split('T')[0], startTime: '04:30 PM', endTime: '05:30 PM', type: 'health' }
+  ]);
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [isCheckInOpen, setIsCheckInOpen] = useState(true);
+
+  const handleAddWorkout = (w: Workout) => {
+    setWorkouts([...workouts, w]);
+    
+    // Feed into calendar
+    const formatTime = (time: string) => {
+      let [h, m] = time.split(':').map(Number);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12;
+      h = h ? h : 12;
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+    };
+
+    const newEvent: CalendarEvent = {
+      id: `w-${w.id}`,
+      title: `Workout: ${w.title}`,
+      date: w.date,
+      startTime: formatTime(w.startTime),
+      endTime: formatTime(w.endTime),
+      type: 'workout'
+    };
+    setCalendarEvents(prev => [...prev, newEvent]);
+  };
+
+  const handleUpdateWorkout = (updatedWorkout: Workout) => {
+    setWorkouts(prev => prev.map(w => w.id === updatedWorkout.id ? updatedWorkout : w));
+    
+    // Update calendar event too
+    const formatTime = (time: string) => {
+      let [h, m] = time.split(':').map(Number);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12;
+      h = h ? h : 12;
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+    };
+
+    setCalendarEvents(prev => prev.map(e => e.id === `w-${updatedWorkout.id}` ? {
+      ...e,
+      title: `Workout: ${updatedWorkout.title}`,
+      date: updatedWorkout.date,
+      startTime: formatTime(updatedWorkout.startTime),
+      endTime: formatTime(updatedWorkout.endTime)
+    } : e));
+  };
+
+  const handleDeleteWorkout = (id: string) => {
+    setWorkouts(prev => prev.filter(w => w.id !== id));
+    setCalendarEvents(prev => prev.filter(e => e.id !== `w-${id}`));
+  };
+
+  const handleUpdateEvent = (updatedEvent: CalendarEvent) => {
+    setCalendarEvents(prev => prev.map(e => e.id === updatedEvent.id ? updatedEvent : e));
+    
+    // If it's a workout event, update the workout state too
+    if (updatedEvent.id.startsWith('w-')) {
+      const workoutId = updatedEvent.id.replace('w-', '');
+      
+      const parseTime = (timeStr: string) => {
+        const [time, modifier] = timeStr.split(' ');
+        let [hours, minutes] = time.split(':').map(Number);
+        if (hours === 12) hours = 0;
+        if (modifier === 'PM') hours += 12;
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      };
+
+      setWorkouts(prev => prev.map(w => w.id === workoutId ? {
+        ...w,
+        date: updatedEvent.date,
+        startTime: parseTime(updatedEvent.startTime),
+        endTime: parseTime(updatedEvent.endTime)
+      } : w));
+    }
+  };
 
   const handleCheckInSave = (energy: number, focus: number) => {
     setDailyPulseData({
@@ -2289,6 +2920,9 @@ export default function App() {
             </div>
             <div onClick={() => setActiveTab('calendar')}>
               <SidebarItem icon={Calendar} label="Calendar" active={activeTab === 'calendar'} collapsed={isSidebarCollapsed} />
+            </div>
+            <div onClick={() => setActiveTab('workout')}>
+              <SidebarItem icon={Activity} label="Workout Planner" active={activeTab === 'workout'} collapsed={isSidebarCollapsed} />
             </div>
             <div onClick={() => setActiveTab('quests')}>
               <SidebarItem icon={Gamepad2} label="Side Quests" active={activeTab === 'quests'} collapsed={isSidebarCollapsed} />
@@ -2433,6 +3067,7 @@ export default function App() {
                     schedule={schedule} 
                     onUpdateSchedule={setSchedule} 
                     onUpdateTasks={setAllTasks}
+                    onStartCheckIn={() => setIsCheckInOpen(true)}
                   />
                 </motion.div>
               ) : activeTab === 'projects' ? (
@@ -2451,7 +3086,33 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                 >
-                  <CalendarTab schedule={schedule} />
+                  <CalendarTab 
+                    schedule={schedule} 
+                    events={calendarEvents}
+                    onAddEvent={(e) => setCalendarEvents([...calendarEvents, e])}
+                    onUpdateEvent={handleUpdateEvent}
+                    onDeleteEvent={(id) => {
+                      setCalendarEvents(prev => prev.filter(e => e.id !== id));
+                      if (id.startsWith('w-')) {
+                        const workoutId = id.replace('w-', '');
+                        setWorkouts(prev => prev.filter(w => w.id !== workoutId));
+                      }
+                    }}
+                  />
+                </motion.div>
+              ) : activeTab === 'workout' ? (
+                <motion.div 
+                  key="workout"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                >
+                  <WorkoutPlannerTab 
+                    workouts={workouts}
+                    onAddWorkout={handleAddWorkout}
+                    onUpdateWorkout={handleUpdateWorkout}
+                    onDeleteWorkout={handleDeleteWorkout}
+                  />
                 </motion.div>
               ) : activeTab === 'quests' ? (
                 <motion.div 

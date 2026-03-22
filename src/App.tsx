@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   LayoutDashboard, 
   Target, 
@@ -3389,17 +3390,36 @@ const SettingsTab = ({
     </div>
   );
 };
-const SidebarItem = ({ icon: Icon, label, active = false, collapsed = false }: { icon: any, label: string, active?: boolean, collapsed?: boolean }) => (
-  <div className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-300 group relative ${active ? 'glass-button shadow-lg' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>
-    <Icon size={20} className="shrink-0" />
-    {!collapsed && <span className="font-semibold text-sm whitespace-nowrap">{label}</span>}
-    {collapsed && (
-      <div className="absolute left-full ml-4 px-3 py-1 bg-black/80 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-widest rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[500] whitespace-nowrap border border-white/10 shadow-xl">
-        {label}
-      </div>
-    )}
-  </div>
-);
+const SidebarItem = ({ icon: Icon, label, active = false, collapsed = false }: { icon: any, label: string, active?: boolean, collapsed?: boolean }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [tooltipY, setTooltipY] = useState<number | null>(null);
+
+  return (
+    <div
+      ref={ref}
+      onMouseEnter={() => {
+        if (collapsed && ref.current) {
+          const rect = ref.current.getBoundingClientRect();
+          setTooltipY(rect.top + rect.height / 2);
+        }
+      }}
+      onMouseLeave={() => setTooltipY(null)}
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-300 ${active ? 'glass-button shadow-lg' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}
+    >
+      <Icon size={20} className="shrink-0" />
+      {!collapsed && <span className="font-semibold text-sm whitespace-nowrap">{label}</span>}
+      {collapsed && tooltipY !== null && createPortal(
+        <div
+          style={{ position: 'fixed', top: tooltipY, left: 104, transform: 'translateY(-50%)', zIndex: 9999 }}
+          className="px-3 py-1.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg whitespace-nowrap border border-white/20 shadow-2xl pointer-events-none"
+        >
+          {label}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+};
 
 const Card = ({ title, children, className = "" }: { title?: string, children: React.ReactNode, className?: string }) => (
   <div className={`glass-card rounded-3xl p-6 ${className}`}>

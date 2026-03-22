@@ -82,24 +82,22 @@ interface TimeBlock {
 interface Task {
   id: string;
   title: string;
-  duration?: number; // minutes
-  estimatedTime?: number; // minutes, for the task database
+  estimatedDuration?: '<5min' | '<30min' | '30min+';
   projectId?: string;
-  urgency: 'low' | 'medium' | 'high';
+  priority: 'low' | 'medium' | 'high';
   isStrategic: boolean;
   isFrog: boolean;
   status: 'todo' | 'done';
   notes?: string;
+  deadline?: string;
 }
 
 interface Project {
   id: string;
   title: string;
-  progress: number;
   status: 'on-track' | 'at-risk' | 'completed';
   deadline: string;
   description: string;
-  tasks: { id: string; title: string; done: boolean }[];
 }
 
 interface Note {
@@ -1069,188 +1067,218 @@ const LifeVision = ({ visionData, onUpdateVision }: { visionData: LifeVisionData
   );
 };
 
-const TaskDatabaseTab = ({ 
-  allTasks, 
-  projects, 
-  onUpdateTasks 
-}: { 
-  allTasks: Task[], 
-  projects: Project[], 
-  onUpdateTasks: (t: Task[]) => void 
+const DURATION_OPTIONS = ['<5min', '<30min', '30min+'] as const;
+type DurationOption = typeof DURATION_OPTIONS[number];
+
+const priorityStyle = (p: 'low' | 'medium' | 'high') =>
+  p === 'high' ? 'bg-red-500/20 text-red-400' : p === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-white/10 text-white/40';
+
+const blankNewTask = () => ({
+  title: '',
+  notes: '',
+  deadline: '',
+  projectId: '',
+  priority: 'medium' as const,
+  estimatedDuration: '' as DurationOption | '',
+  isFrog: false,
+});
+
+const TaskDatabaseTab = ({
+  allTasks,
+  projects,
+  onUpdateTasks
+}: {
+  allTasks: Task[],
+  projects: Project[],
+  onUpdateTasks: (t: Task[]) => void
 }) => {
-  const [newTask, setNewTask] = useState({
-    title: '',
-    estimatedTime: 30,
-    projectId: '',
-    urgency: 'medium' as const
-  });
+  const [newTask, setNewTask] = useState(blankNewTask());
+  const [showForm, setShowForm] = useState(false);
 
   const handleAddTask = () => {
-    if (!newTask.title) return;
+    if (!newTask.title.trim()) return;
     const t: Task = {
       id: Math.random().toString(36).substr(2, 9),
-      title: newTask.title,
-      estimatedTime: newTask.estimatedTime,
-      projectId: newTask.projectId,
-      urgency: newTask.urgency,
+      title: newTask.title.trim(),
+      notes: newTask.notes || undefined,
+      deadline: newTask.deadline || undefined,
+      projectId: newTask.projectId || undefined,
+      priority: newTask.priority,
+      estimatedDuration: (newTask.estimatedDuration as DurationOption) || undefined,
+      isFrog: newTask.isFrog,
       isStrategic: false,
-      isFrog: false,
       status: 'todo'
     };
     onUpdateTasks([...allTasks, t]);
-    setNewTask({ title: '', estimatedTime: 30, projectId: '', urgency: 'medium' });
+    setNewTask(blankNewTask());
+    setShowForm(false);
   };
 
-  const deleteTask = (id: string) => {
-    onUpdateTasks(allTasks.filter(t => t.id !== id));
-  };
+  const deleteTask = (id: string) => onUpdateTasks(allTasks.filter(t => t.id !== id));
+
+  const done = allTasks.filter(t => t.status === 'done').length;
 
   return (
-    <div className="space-y-8">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          <Card title="Task Inventory">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="pb-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">Task</th>
-                    <th className="pb-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">Project</th>
-                    <th className="pb-4 text-[10px] font-bold text-white/40 uppercase tracking-widest text-center">Est. Time</th>
-                    <th className="pb-4 text-[10px] font-bold text-white/40 uppercase tracking-widest text-center">Urgency</th>
-                    <th className="pb-4 text-[10px] font-bold text-white/40 uppercase tracking-widest text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10">
-                  {allTasks.map(task => (
-                    <tr key={task.id} className="group hover:bg-white/5 transition-colors">
-                      <td className="py-4 pr-4">
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-sm text-white">{task.title}</span>
-                          <span className="text-[10px] text-white/40 uppercase tracking-widest">{task.status}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 pr-4">
-                        <span className="text-xs font-medium text-white/60">
-                          {projects.find(p => p.id === task.projectId)?.title || 'No Project'}
-                        </span>
-                      </td>
-                      <td className="py-4 pr-4 text-center">
-                        <span className="text-xs font-mono text-white/60">{task.estimatedTime || task.duration || 0}m</span>
-                      </td>
-                      <td className="py-4 pr-4 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest ${
-                          task.urgency === 'high' ? 'bg-red-500/20 text-red-400' : 
-                          task.urgency === 'medium' ? 'bg-amber-500/20 text-amber-400' : 
-                          'bg-white/10 text-white/60'
-                        }`}>
-                          {task.urgency}
-                        </span>
-                      </td>
-                      <td className="py-4 text-right">
-                        <button 
-                          onClick={() => deleteTask(task.id)}
-                          className="p-2 text-white/20 hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {allTasks.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="py-12 text-center text-white/20 italic text-sm">
-                        Your task database is empty. Add your first task below.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex gap-4 text-sm text-white/40 font-medium">
+          <span>{allTasks.length} tasks</span>
+          <span>·</span>
+          <span>{done} done</span>
         </div>
+        <button
+          onClick={() => setShowForm(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-white/20 border border-white/30 rounded-xl text-sm font-bold text-white hover:bg-white/30 transition-all"
+        >
+          <Plus size={16} /> Add Task
+        </button>
+      </div>
 
-        <div className="space-y-6">
-          <Card title="Add New Task">
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 block">Task Title</label>
-                <input 
-                  type="text" 
-                  value={newTask.title}
-                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                  placeholder="What needs to be done?"
-                  className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30 transition-all"
-                />
+      <Card title="Task Inventory">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="pb-3 text-[10px] font-bold text-white/40 uppercase tracking-widest">Task</th>
+                <th className="pb-3 text-[10px] font-bold text-white/40 uppercase tracking-widest">Project</th>
+                <th className="pb-3 text-[10px] font-bold text-white/40 uppercase tracking-widest text-center">Duration</th>
+                <th className="pb-3 text-[10px] font-bold text-white/40 uppercase tracking-widest text-center">Priority</th>
+                <th className="pb-3 text-[10px] font-bold text-white/40 uppercase tracking-widest text-center">Deadline</th>
+                <th className="pb-3 text-[10px] font-bold text-white/40 uppercase tracking-widest text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {allTasks.map(task => (
+                <tr key={task.id} className="group hover:bg-white/5 transition-colors">
+                  <td className="py-3 pr-4">
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-2">
+                        {task.isFrog && <span className="text-xs">🐸</span>}
+                        <span className={`font-semibold text-sm ${task.status === 'done' ? 'line-through text-white/30' : 'text-white'}`}>{task.title}</span>
+                      </div>
+                      {task.notes && <span className="text-[10px] text-white/30 italic truncate max-w-[200px]">{task.notes}</span>}
+                    </div>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <span className="text-xs font-medium text-white/50">
+                      {projects.find(p => p.id === task.projectId)?.title || '—'}
+                    </span>
+                  </td>
+                  <td className="py-3 pr-4 text-center">
+                    {task.estimatedDuration
+                      ? <span className="text-[10px] font-mono text-white/50">{task.estimatedDuration}</span>
+                      : <span className="text-white/20">—</span>}
+                  </td>
+                  <td className="py-3 pr-4 text-center">
+                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest ${priorityStyle(task.priority)}`}>
+                      {task.priority}
+                    </span>
+                  </td>
+                  <td className="py-3 pr-4 text-center">
+                    {task.deadline
+                      ? <span className="text-[10px] text-white/50">{task.deadline}</span>
+                      : <span className="text-white/20">—</span>}
+                  </td>
+                  <td className="py-3 text-right">
+                    <button onClick={() => deleteTask(task.id)} className="p-2 text-white/20 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {allTasks.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-white/20 italic text-sm">
+                    No tasks yet. Click "Add Task" to get started.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Add Task Modal */}
+      <AnimatePresence>
+        {showForm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6"
+            onClick={e => { if (e.target === e.currentTarget) setShowForm(false); }}
+          >
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-lg bg-zinc-900/95 border border-white/10 rounded-3xl p-8 space-y-5 shadow-2xl"
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-white">New Task</h2>
+                <button onClick={() => setShowForm(false)} className="text-white/40 hover:text-white"><X size={20} /></button>
               </div>
+
               <div>
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 block">Project</label>
-                <select 
-                  value={newTask.projectId}
-                  onChange={(e) => setNewTask({ ...newTask, projectId: e.target.value })}
-                  className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white transition-all"
-                >
-                  <option value="" className="bg-zinc-900">No Project</option>
-                  {projects.map(p => (
-                    <option key={p.id} value={p.id} className="bg-zinc-900">{p.title}</option>
-                  ))}
-                </select>
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Title</label>
+                <input autoFocus type="text" value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })}
+                  onKeyDown={e => e.key === 'Enter' && handleAddTask()}
+                  placeholder="What needs to be done?" className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/20" />
               </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Details / Notes</label>
+                <textarea value={newTask.notes} onChange={e => setNewTask({ ...newTask, notes: e.target.value })}
+                  placeholder="Add context, links, or details…" rows={3}
+                  className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/20 resize-none" />
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 block">Est. Time (min)</label>
-                  <input 
-                    type="number" 
-                    value={newTask.estimatedTime}
-                    onChange={(e) => setNewTask({ ...newTask, estimatedTime: parseInt(e.target.value) })}
-                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white transition-all"
-                  />
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Project</label>
+                  <select value={newTask.projectId} onChange={e => setNewTask({ ...newTask, projectId: e.target.value })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20">
+                    <option value="" className="bg-zinc-900">No Project</option>
+                    {projects.map(p => <option key={p.id} value={p.id} className="bg-zinc-900">{p.title}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 block">Urgency</label>
-                  <select 
-                    value={newTask.urgency}
-                    onChange={(e) => setNewTask({ ...newTask, urgency: e.target.value as any })}
-                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white transition-all"
-                  >
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Deadline</label>
+                  <input type="date" value={newTask.deadline} onChange={e => setNewTask({ ...newTask, deadline: e.target.value })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Priority</label>
+                  <select value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value as Task['priority'] })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20">
                     <option value="low" className="bg-zinc-900">Low</option>
                     <option value="medium" className="bg-zinc-900">Medium</option>
                     <option value="high" className="bg-zinc-900">High</option>
                   </select>
                 </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Est. Duration</label>
+                  <select value={newTask.estimatedDuration} onChange={e => setNewTask({ ...newTask, estimatedDuration: e.target.value as DurationOption | '' })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20">
+                    <option value="" className="bg-zinc-900">—</option>
+                    {DURATION_OPTIONS.map(d => <option key={d} value={d} className="bg-zinc-900">{d}</option>)}
+                  </select>
+                </div>
               </div>
-              <button 
-                onClick={handleAddTask}
-                disabled={!newTask.title}
-                className="w-full py-3 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-xl font-bold text-sm hover:bg-white/30 transition-all shadow-lg shadow-black/20 disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                <Plus size={16} />
-                Add to Database
-              </button>
-            </div>
-          </Card>
 
-          <Card title="Database Insights">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-white/60 font-medium">Total Tasks</span>
-                <span className="text-lg font-bold text-white">{allTasks.length}</span>
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <input type="checkbox" checked={newTask.isFrog} onChange={e => setNewTask({ ...newTask, isFrog: e.target.checked })}
+                  className="w-4 h-4 accent-white rounded" />
+                <span className="text-sm font-medium text-white/60 group-hover:text-white transition-colors">🐸 Frog — do this first thing</span>
+              </label>
+
+              <div className="flex gap-3 pt-2 border-t border-white/10">
+                <button onClick={handleAddTask} disabled={!newTask.title.trim()}
+                  className="flex-1 py-3 bg-white/20 border border-white/30 rounded-xl font-bold text-sm text-white hover:bg-white/30 transition-all disabled:opacity-40 flex items-center justify-center gap-2">
+                  <Plus size={16} /> Add Task
+                </button>
+                <button onClick={() => setShowForm(false)} className="px-5 py-3 text-white/40 hover:text-white transition-colors text-sm font-medium">
+                  Cancel
+                </button>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-white/60 font-medium">Total Estimated Time</span>
-                <span className="text-lg font-bold text-white">
-                  {Math.round(allTasks.reduce((acc, t) => acc + (t.estimatedTime || 0), 0) / 60)}h {allTasks.reduce((acc, t) => acc + (t.estimatedTime || 0), 0) % 60}m
-                </span>
-              </div>
-              <div className="pt-4 border-t border-white/10">
-                <p className="text-[10px] text-white/40 italic">
-                  Tasks added here appear in the Overview, Bingo board, Wheel, and Pomodoro session picker.
-                </p>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -1471,10 +1499,11 @@ const WorkMode = ({
                       <button onClick={() => openDetail(task)} className={`text-sm font-medium flex-1 text-left transition-all hover:underline underline-offset-2 ${task.status === 'done' ? 'line-through text-white/30' : 'text-white'}`}>
                         {task.title}
                       </button>
+                      {task.isFrog && <span className="text-xs">🐸</span>}
                       {task.notes && <span className="text-[10px] text-white/30 italic hidden group-hover:inline">has notes</span>}
-                      {task.estimatedTime ? <span className="text-[10px] font-mono text-white/30">{task.estimatedTime}m</span> : null}
-                      <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ${task.urgency === 'high' ? 'bg-red-500/20 text-red-400' : task.urgency === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-white/10 text-white/40'}`}>
-                        {task.urgency}
+                      {task.estimatedDuration ? <span className="text-[10px] font-mono text-white/30">{task.estimatedDuration}</span> : null}
+                      <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ${priorityStyle(task.priority)}`}>
+                        {task.priority}
                       </span>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => openDetail(task)} className="p-1.5 hover:bg-white/10 rounded-lg transition-all" title="Edit">
@@ -1626,7 +1655,7 @@ const WorkMode = ({
                       {sessionTaskIds.includes(task.id) && <Check size={11} className="text-black" />}
                     </div>
                     <span className="text-sm text-white font-medium flex-1">{task.title}</span>
-                    {task.estimatedTime ? <span className="text-[10px] font-mono text-white/30">{task.estimatedTime}m</span> : null}
+                    {task.estimatedDuration ? <span className="text-[10px] font-mono text-white/30">{task.estimatedDuration}</span> : null}
                     {task.projectId && <span className="text-[8px] font-bold text-white/30 uppercase tracking-widest">{projects.find(p => p.id === task.projectId)?.title}</span>}
                   </div>
                 ))}
@@ -1677,10 +1706,10 @@ const WorkMode = ({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Urgency</label>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Priority</label>
                   <select
-                    value={detailTask.urgency}
-                    onChange={e => setDetailTask({ ...detailTask, urgency: e.target.value as Task['urgency'] })}
+                    value={detailTask.priority}
+                    onChange={e => setDetailTask({ ...detailTask, priority: e.target.value as Task['priority'] })}
                     className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20"
                   >
                     <option value="low" className="bg-zinc-900">Low</option>
@@ -1689,16 +1718,26 @@ const WorkMode = ({
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Est. Time (min)</label>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Est. Duration</label>
+                  <select
+                    value={detailTask.estimatedDuration || ''}
+                    onChange={e => setDetailTask({ ...detailTask, estimatedDuration: e.target.value as Task['estimatedDuration'] || undefined })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20"
+                  >
+                    <option value="" className="bg-zinc-900">—</option>
+                    {DURATION_OPTIONS.map(d => <option key={d} value={d} className="bg-zinc-900">{d}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Deadline</label>
                   <input
-                    type="number"
-                    value={detailTask.estimatedTime || ''}
-                    onChange={e => setDetailTask({ ...detailTask, estimatedTime: parseInt(e.target.value) || undefined })}
-                    placeholder="30"
-                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20 placeholder:text-white/30"
+                    type="date"
+                    value={detailTask.deadline || ''}
+                    onChange={e => setDetailTask({ ...detailTask, deadline: e.target.value || undefined })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20"
                   />
                 </div>
-                <div className="col-span-2">
+                <div>
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Project</label>
                   <select
                     value={detailTask.projectId || ''}
@@ -1712,10 +1751,6 @@ const WorkMode = ({
               </div>
 
               <div className="flex gap-6">
-                <label className="flex items-center gap-2 cursor-pointer group">
-                  <input type="checkbox" checked={detailTask.isStrategic} onChange={e => setDetailTask({ ...detailTask, isStrategic: e.target.checked })} className="w-4 h-4 rounded bg-white/10 border-white/20 accent-white" />
-                  <span className="text-xs font-bold text-white/40 group-hover:text-white transition-colors">Strategic</span>
-                </label>
                 <label className="flex items-center gap-2 cursor-pointer group">
                   <input type="checkbox" checked={detailTask.isFrog} onChange={e => setDetailTask({ ...detailTask, isFrog: e.target.checked })} className="w-4 h-4 rounded bg-white/10 border-white/20 accent-white" />
                   <span className="text-xs font-bold text-white/40 group-hover:text-white transition-colors">Frog 🐸</span>
@@ -1749,51 +1784,69 @@ const WorkMode = ({
   );
 };
 
-const ProjectsTab = ({ 
-  projects, 
-  onAddProject, 
-  onUpdateProject, 
-  onDeleteProject 
-}: { 
-  projects: Project[], 
+const blankNewProjectTask = (projectId: string) => ({
+  title: '',
+  notes: '',
+  deadline: '',
+  priority: 'medium' as const,
+  estimatedDuration: '' as DurationOption | '',
+  isFrog: false,
+  projectId,
+});
+
+const ProjectsTab = ({
+  projects,
+  allTasks,
+  onAddProject,
+  onUpdateProject,
+  onDeleteProject,
+  onUpdateTasks
+}: {
+  projects: Project[],
+  allTasks: Task[],
   onAddProject: (p: Project) => void,
   onUpdateProject: (p: Project) => void,
-  onDeleteProject: (id: string) => void
+  onDeleteProject: (id: string) => void,
+  onUpdateTasks: (t: Task[]) => void
 }) => {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isAddingProject, setIsAddingProject] = useState(false);
-  const [newProject, setNewProject] = useState({
-    title: '',
-    description: '',
-    deadline: '',
-    status: 'on-track' as const
-  });
-  const [isAddingTask, setIsAddingTask] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newProject, setNewProject] = useState({ title: '', description: '', deadline: '', status: 'on-track' as const });
+  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [newTask, setNewTask] = useState(blankNewProjectTask(''));
+
+  const projectTasks = (projectId: string) => allTasks.filter(t => t.projectId === projectId);
+  const projectProgress = (projectId: string) => {
+    const tasks = projectTasks(projectId);
+    if (tasks.length === 0) return 0;
+    return Math.round((tasks.filter(t => t.status === 'done').length / tasks.length) * 100);
+  };
 
   const handleToggleTask = (taskId: string) => {
-    if (!selectedProject) return;
-    const updatedTasks = selectedProject.tasks.map(t =>
-      t.id === taskId ? { ...t, done: !t.done } : t
-    );
-    const doneTasks = updatedTasks.filter(t => t.done).length;
-    const progress = updatedTasks.length > 0 ? Math.round((doneTasks / updatedTasks.length) * 100) : 0;
-    const updated = { ...selectedProject, tasks: updatedTasks, progress };
-    onUpdateProject(updated);
-    setSelectedProject(updated);
+    onUpdateTasks(allTasks.map(t => t.id === taskId ? { ...t, status: (t.status === 'done' ? 'todo' : 'done') as Task['status'] } : t));
   };
 
   const handleAddTask = () => {
-    if (!newTaskTitle.trim() || !selectedProject) return;
-    const newTask = { id: Math.random().toString(36).substr(2, 9), title: newTaskTitle.trim(), done: false };
-    const updatedTasks = [...selectedProject.tasks, newTask];
-    const doneTasks = updatedTasks.filter(t => t.done).length;
-    const progress = updatedTasks.length > 0 ? Math.round((doneTasks / updatedTasks.length) * 100) : 0;
-    const updated = { ...selectedProject, tasks: updatedTasks, progress };
-    onUpdateProject(updated);
-    setSelectedProject(updated);
-    setNewTaskTitle('');
-    setIsAddingTask(false);
+    if (!newTask.title.trim() || !selectedProject) return;
+    const t: Task = {
+      id: Math.random().toString(36).substr(2, 9),
+      title: newTask.title.trim(),
+      notes: newTask.notes || undefined,
+      deadline: newTask.deadline || undefined,
+      projectId: selectedProject.id,
+      priority: newTask.priority,
+      estimatedDuration: (newTask.estimatedDuration as DurationOption) || undefined,
+      isFrog: newTask.isFrog,
+      isStrategic: false,
+      status: 'todo'
+    };
+    onUpdateTasks([...allTasks, t]);
+    setNewTask(blankNewProjectTask(selectedProject.id));
+    setShowTaskForm(false);
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    onUpdateTasks(allTasks.filter(t => t.id !== taskId));
   };
 
   const handleAddProject = () => {
@@ -1804,8 +1857,6 @@ const ProjectsTab = ({
       description: newProject.description,
       deadline: newProject.deadline,
       status: newProject.status,
-      progress: 0,
-      tasks: []
     };
     onAddProject(p);
     setIsAddingProject(false);
@@ -1813,55 +1864,52 @@ const ProjectsTab = ({
   };
 
   if (selectedProject) {
+    const tasks = projectTasks(selectedProject.id);
+    const progress = projectProgress(selectedProject.id);
     return (
       <div className="space-y-8">
-        <button 
-          onClick={() => setSelectedProject(null)}
-          className="flex items-center gap-2 text-sm font-bold text-white/40 hover:text-white transition-colors uppercase tracking-widest"
-        >
-          <ChevronLeft size={16} />
-          Back to Projects
+        <button onClick={() => setSelectedProject(null)}
+          className="flex items-center gap-2 text-sm font-bold text-white/40 hover:text-white transition-colors uppercase tracking-widest">
+          <ChevronLeft size={16} /> Back to Projects
         </button>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
               <h1 className="text-4xl font-bold tracking-tight text-white">{selectedProject.title}</h1>
               <p className="text-white/60 font-medium">{selectedProject.description}</p>
             </div>
 
-            <Card title="Project Tasks">
-              <div className="space-y-4">
-                {selectedProject.tasks.map((task) => (
-                  <div key={task.id} className="flex items-center gap-4 p-4 glass-card rounded-2xl">
-                    <button
-                      onClick={() => handleToggleTask(task.id)}
-                      className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${task.done ? 'bg-white/80 border-white/80' : 'border-white/20 hover:border-white/50'}`}
-                    >
-                      {task.done && <Check size={12} className="text-black" />}
+            <Card title={`Tasks — ${tasks.filter(t => t.status === 'done').length}/${tasks.length} done`}>
+              <div className="space-y-2">
+                {tasks.map(task => (
+                  <div key={task.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-white/5 transition-all group">
+                    <button onClick={() => handleToggleTask(task.id)}
+                      className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${task.status === 'done' ? 'bg-white/80 border-white/80' : 'border-white/20 hover:border-white/50'}`}>
+                      {task.status === 'done' && <Check size={11} className="text-black" />}
                     </button>
-                    <span className={`font-medium transition-all ${task.done ? 'line-through text-white/30' : 'text-white'}`}>{task.title}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {task.isFrog && <span className="text-xs">🐸</span>}
+                        <span className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-white/30' : 'text-white'}`}>{task.title}</span>
+                        {task.estimatedDuration && <span className="text-[10px] font-mono text-white/30">{task.estimatedDuration}</span>}
+                        <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ${priorityStyle(task.priority)}`}>{task.priority}</span>
+                        {task.deadline && <span className="text-[10px] text-white/30 flex items-center gap-1"><Calendar size={9} />{task.deadline}</span>}
+                      </div>
+                      {task.notes && <p className="text-[11px] text-white/40 mt-0.5 italic">{task.notes}</p>}
+                    </div>
+                    <button onClick={() => handleDeleteTask(task.id)} className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/20 rounded-lg transition-all flex-shrink-0">
+                      <Trash2 size={12} className="text-white/30 hover:text-red-400" />
+                    </button>
                   </div>
                 ))}
-                {isAddingTask ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      autoFocus
-                      type="text"
-                      value={newTaskTitle}
-                      onChange={(e) => setNewTaskTitle(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddTask(); if (e.key === 'Escape') { setIsAddingTask(false); setNewTaskTitle(''); } }}
-                      placeholder="Task title..."
-                      className="flex-1 p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30"
-                    />
-                    <button onClick={handleAddTask} className="px-3 py-3 bg-white/20 rounded-xl text-white text-sm font-bold hover:bg-white/30 transition-all">Add</button>
-                    <button onClick={() => { setIsAddingTask(false); setNewTaskTitle(''); }} className="px-3 py-3 text-white/40 hover:text-white transition-all"><X size={16} /></button>
-                  </div>
-                ) : (
-                  <button onClick={() => setIsAddingTask(true)} className="w-full py-3 border border-dashed border-white/20 rounded-2xl text-xs font-bold text-white/40 hover:bg-white/10 transition-all uppercase tracking-widest">
-                    + Add Task to Project
-                  </button>
+                {tasks.length === 0 && (
+                  <p className="text-center text-white/20 italic text-sm py-6">No tasks yet. Add the first one!</p>
                 )}
+                <button onClick={() => { setNewTask(blankNewProjectTask(selectedProject.id)); setShowTaskForm(true); }}
+                  className="w-full py-3 border border-dashed border-white/20 rounded-2xl text-xs font-bold text-white/40 hover:bg-white/10 transition-all uppercase tracking-widest mt-2">
+                  + Add Task
+                </button>
               </div>
             </Card>
           </div>
@@ -1871,11 +1919,10 @@ const ProjectsTab = ({
               <div className="space-y-6">
                 <div>
                   <div className="flex justify-between text-[10px] font-bold text-white/40 uppercase mb-2">
-                    <span>Overall Progress</span>
-                    <span>{selectedProject.progress}%</span>
+                    <span>Overall Progress</span><span>{progress}%</span>
                   </div>
                   <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-white/80 transition-all duration-500" style={{ width: `${selectedProject.progress}%` }}></div>
+                    <div className="h-full bg-white/80 transition-all duration-500" style={{ width: `${progress}%` }} />
                   </div>
                 </div>
                 <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
@@ -1886,12 +1933,78 @@ const ProjectsTab = ({
                 </div>
                 <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
                   <p className="text-[10px] font-bold text-white/40 uppercase mb-1">Deadline</p>
-                  <p className="font-bold text-white">{selectedProject.deadline}</p>
+                  <p className="font-bold text-white">{selectedProject.deadline || '—'}</p>
                 </div>
               </div>
             </Card>
           </div>
         </div>
+
+        {/* Add Task Modal */}
+        <AnimatePresence>
+          {showTaskForm && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6"
+              onClick={e => { if (e.target === e.currentTarget) setShowTaskForm(false); }}
+            >
+              <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="w-full max-w-lg bg-zinc-900/95 border border-white/10 rounded-3xl p-8 space-y-5 shadow-2xl"
+              >
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold text-white">Add Task to {selectedProject.title}</h2>
+                  <button onClick={() => setShowTaskForm(false)} className="text-white/40 hover:text-white"><X size={20} /></button>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Title</label>
+                  <input autoFocus type="text" value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })}
+                    onKeyDown={e => e.key === 'Enter' && handleAddTask()}
+                    placeholder="What needs to be done?" className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/20" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Details / Notes</label>
+                  <textarea value={newTask.notes} onChange={e => setNewTask({ ...newTask, notes: e.target.value })}
+                    placeholder="Add context or details…" rows={3}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/20 resize-none" />
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Priority</label>
+                    <select value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value as Task['priority'] })}
+                      className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20">
+                      <option value="low" className="bg-zinc-900">Low</option>
+                      <option value="medium" className="bg-zinc-900">Medium</option>
+                      <option value="high" className="bg-zinc-900">High</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Duration</label>
+                    <select value={newTask.estimatedDuration} onChange={e => setNewTask({ ...newTask, estimatedDuration: e.target.value as DurationOption | '' })}
+                      className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20">
+                      <option value="" className="bg-zinc-900">—</option>
+                      {DURATION_OPTIONS.map(d => <option key={d} value={d} className="bg-zinc-900">{d}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Deadline</label>
+                    <input type="date" value={newTask.deadline} onChange={e => setNewTask({ ...newTask, deadline: e.target.value })}
+                      className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20" />
+                  </div>
+                </div>
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input type="checkbox" checked={newTask.isFrog} onChange={e => setNewTask({ ...newTask, isFrog: e.target.checked })} className="w-4 h-4 accent-white rounded" />
+                  <span className="text-sm font-medium text-white/60 group-hover:text-white transition-colors">🐸 Frog — do this first thing</span>
+                </label>
+                <div className="flex gap-3 pt-2 border-t border-white/10">
+                  <button onClick={handleAddTask} disabled={!newTask.title.trim()}
+                    className="flex-1 py-3 bg-white/20 border border-white/30 rounded-xl font-bold text-sm text-white hover:bg-white/30 transition-all disabled:opacity-40 flex items-center justify-center gap-2">
+                    <Plus size={16} /> Add Task
+                  </button>
+                  <button onClick={() => setShowTaskForm(false)} className="px-5 py-3 text-white/40 hover:text-white transition-colors text-sm font-medium">Cancel</button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }
@@ -1900,22 +2013,17 @@ const ProjectsTab = ({
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-4xl font-bold tracking-tight text-white">Projects</h1>
-        <button 
-          onClick={() => setIsAddingProject(true)}
-          className="bg-white/20 backdrop-blur-md text-white border border-white/30 px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-white/30 transition-colors shadow-lg shadow-black/20"
-        >
-          <Plus size={18} />
-          <span>New Project</span>
+        <button onClick={() => setIsAddingProject(true)}
+          className="bg-white/20 backdrop-blur-md text-white border border-white/30 px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-white/30 transition-colors shadow-lg shadow-black/20">
+          <Plus size={18} /><span>New Project</span>
         </button>
       </div>
 
       <AnimatePresence>
         {isAddingProject && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
+            onClick={e => { if (e.target === e.currentTarget) setIsAddingProject(false); }}
           >
             <Card className="max-w-md w-full shadow-2xl border-white/10">
               <div className="flex items-center justify-between mb-6">
@@ -1925,36 +2033,21 @@ const ProjectsTab = ({
               <div className="space-y-4">
                 <div>
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 block">Project Title</label>
-                  <input 
-                    type="text" 
-                    value={newProject.title}
-                    onChange={(e) => setNewProject({ ...newProject, title: e.target.value })}
-                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white transition-all"
-                  />
+                  <input autoFocus type="text" value={newProject.title} onChange={e => setNewProject({ ...newProject, title: e.target.value })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white transition-all" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 block">Description</label>
-                  <textarea 
-                    value={newProject.description}
-                    onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
-                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 h-24 resize-none text-white transition-all"
-                  />
+                  <textarea value={newProject.description} onChange={e => setNewProject({ ...newProject, description: e.target.value })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 h-24 resize-none text-white transition-all" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1 block">Deadline</label>
-                  <input 
-                    type="text" 
-                    value={newProject.deadline}
-                    onChange={(e) => setNewProject({ ...newProject, deadline: e.target.value })}
-                    placeholder="e.g. Mar 30"
-                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white placeholder:text-white/30 transition-all"
-                  />
+                  <input type="date" value={newProject.deadline} onChange={e => setNewProject({ ...newProject, deadline: e.target.value })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-white/20 text-white transition-all" />
                 </div>
-                <button 
-                  onClick={handleAddProject}
-                  disabled={!newProject.title}
-                  className="w-full py-3 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-xl font-bold text-sm hover:bg-white/30 transition-all shadow-lg shadow-black/20 disabled:opacity-50"
-                >
+                <button onClick={handleAddProject} disabled={!newProject.title}
+                  className="w-full py-3 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-xl font-bold text-sm hover:bg-white/30 transition-all shadow-lg shadow-black/20 disabled:opacity-50">
                   Create Project
                 </button>
               </div>
@@ -1964,37 +2057,37 @@ const ProjectsTab = ({
       </AnimatePresence>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {projects.map(project => (
-          <Card 
-            key={project.id} 
-            className="hover:shadow-md transition-all cursor-pointer group border-white/10"
-          >
-            <div onClick={() => setSelectedProject(project)}>
-              <div className="flex justify-between items-start mb-6">
-                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center group-hover:bg-white/20 group-hover:text-white transition-all text-white border border-transparent group-hover:border-white/30">
-                  <Briefcase size={20} />
+        {projects.map(project => {
+          const progress = projectProgress(project.id);
+          const total = projectTasks(project.id).length;
+          return (
+            <Card key={project.id} className="hover:shadow-md transition-all cursor-pointer group border-white/10">
+              <div onClick={() => setSelectedProject(project)}>
+                <div className="flex justify-between items-start mb-6">
+                  <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center group-hover:bg-white/20 transition-all text-white border border-transparent group-hover:border-white/30">
+                    <Briefcase size={20} />
+                  </div>
+                  <span className={`px-2 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest ${project.status === 'on-track' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                    {project.status.replace('-', ' ')}
+                  </span>
                 </div>
-                <span className={`px-2 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest ${project.status === 'on-track' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-                  {project.status.replace('-', ' ')}
-                </span>
+                <h3 className="text-xl font-bold mb-1 text-white">{project.title}</h3>
+                <p className="text-xs text-white/40 font-medium mb-1 flex items-center gap-1">
+                  <Calendar size={12} /> {project.deadline || 'No deadline'}
+                </p>
+                <p className="text-xs text-white/30 mb-5">{total} task{total !== 1 ? 's' : ''}</p>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-bold text-white/40 uppercase">
+                    <span>Progress</span><span>{progress}%</span>
+                  </div>
+                  <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-white/80 transition-all duration-500" style={{ width: `${progress}%` }} />
+                  </div>
+                </div>
               </div>
-              <h3 className="text-xl font-bold mb-2 text-white">{project.title}</h3>
-              <p className="text-xs text-white/40 font-medium mb-6 flex items-center gap-1">
-                <Calendar size={12} />
-                Deadline: {project.deadline}
-              </p>
-              <div className="space-y-2">
-                <div className="flex justify-between text-[10px] font-bold text-white/40 uppercase">
-                  <span>Progress</span>
-                  <span>{project.progress}%</span>
-                </div>
-                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-white/80 transition-all duration-500" style={{ width: `${project.progress}%` }}></div>
-                </div>
-              </div>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
@@ -3192,15 +3285,23 @@ export default function App() {
   const [isOverwhelmed, setIsOverwhelmed] = useState(false);
   const [visionData, setVisionData] = useState<LifeVisionData | null>(null);
   const [projects, setProjects] = useState<Project[]>([
-    { id: '1', title: 'lifedotAI MVP', progress: 65, status: 'on-track', deadline: 'Mar 30', description: 'Building the first version of the life management AI.', tasks: [{ id: '1a', title: 'Implement Work Mode', done: true }, { id: '1b', title: 'Fix Calendar Alignment', done: false }, { id: '1c', title: 'Refine News UI', done: false }] },
-    { id: '2', title: 'Health Transformation', progress: 40, status: 'at-risk', deadline: 'Apr 15', description: 'Focusing on physical and mental well-being.', tasks: [{ id: '2a', title: 'Daily 5km run', done: false }, { id: '2b', title: 'Meditation 10min', done: false }, { id: '2c', title: 'Meal prep', done: false }] },
-    { id: '3', title: 'Financial Freedom Plan', progress: 20, status: 'on-track', deadline: 'Dec 31', description: 'Long-term wealth building and budgeting.', tasks: [{ id: '3a', title: 'Set up emergency fund', done: false }, { id: '3b', title: 'Automate savings', done: false }, { id: '3c', title: 'Review investments', done: false }] }
+    { id: '1', title: 'lifedotAI MVP', status: 'on-track', deadline: 'Mar 30', description: 'Building the first version of the life management AI.' },
+    { id: '2', title: 'Health Transformation', status: 'at-risk', deadline: 'Apr 15', description: 'Focusing on physical and mental well-being.' },
+    { id: '3', title: 'Financial Freedom Plan', status: 'on-track', deadline: 'Dec 31', description: 'Long-term wealth building and budgeting.' }
   ]);
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([
-    { id: 't1', title: 'Design Landing Page', duration: 60, urgency: 'high', isStrategic: true, isFrog: false, status: 'todo' },
-    { id: 't2', title: 'Write Blog Post', duration: 45, urgency: 'medium', isStrategic: false, isFrog: true, status: 'todo' },
-    { id: 't3', title: 'Review Analytics', duration: 30, urgency: 'low', isStrategic: false, isFrog: false, status: 'todo' },
+    { id: 't1', title: 'Design Landing Page', priority: 'high', isStrategic: true, isFrog: false, status: 'todo' },
+    { id: 't2', title: 'Write Blog Post', priority: 'medium', isStrategic: false, isFrog: true, status: 'todo' },
+    { id: 't3', title: 'Review Analytics', priority: 'low', isStrategic: false, isFrog: false, status: 'todo' },
+    { id: '1a', title: 'Implement Work Mode', projectId: '1', priority: 'high', isStrategic: true, isFrog: false, status: 'done' },
+    { id: '1b', title: 'Fix Calendar Alignment', projectId: '1', priority: 'medium', isStrategic: false, isFrog: false, status: 'todo' },
+    { id: '1c', title: 'Refine News UI', projectId: '1', priority: 'low', isStrategic: false, isFrog: false, status: 'todo' },
+    { id: '2a', title: 'Daily 5km run', projectId: '2', priority: 'high', isStrategic: false, isFrog: true, status: 'todo' },
+    { id: '2b', title: 'Meditation 10min', projectId: '2', priority: 'medium', isStrategic: false, isFrog: false, status: 'todo' },
+    { id: '2c', title: 'Meal prep', projectId: '2', priority: 'low', isStrategic: false, isFrog: false, status: 'todo' },
+    { id: '3a', title: 'Set up emergency fund', projectId: '3', priority: 'high', isStrategic: true, isFrog: false, status: 'todo' },
+    { id: '3b', title: 'Automate savings', projectId: '3', priority: 'medium', isStrategic: false, isFrog: false, status: 'todo' },
+    { id: '3c', title: 'Review investments', projectId: '3', priority: 'low', isStrategic: false, isFrog: false, status: 'todo' },
   ]);
   const [schedule, setSchedule] = useState<DailySchedule | null>(null);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([
@@ -3462,11 +3563,13 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                 >
-                  <ProjectsTab 
-                    projects={projects} 
+                  <ProjectsTab
+                    projects={projects}
+                    allTasks={allTasks}
                     onAddProject={(p) => setProjects([...projects, p])}
                     onUpdateProject={(p) => setProjects(prev => prev.map(proj => proj.id === p.id ? p : proj))}
                     onDeleteProject={(id) => setProjects(prev => prev.filter(p => p.id !== id))}
+                    onUpdateTasks={setAllTasks}
                   />
                 </motion.div>
               ) : activeTab === 'calendar' ? (

@@ -433,52 +433,54 @@ const RelevantNews = ({ interests }: { interests: string[] }) => {
   );
 };
 
+const BREATH_PHASES = ['Inhale', 'Hold', 'Exhale', 'Rest'] as const;
+type BreathPhaseType = typeof BREATH_PHASES[number];
+
 const OverwhelmedModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
   const [step, setStep] = useState<'idle' | 'breathing' | 'completed'>('idle');
-  const [breathPhase, setBreathPhase] = useState<'Inhale' | 'Hold' | 'Exhale' | 'Rest'>('Inhale');
+  const [breathPhase, setBreathPhase] = useState<BreathPhaseType>('Inhale');
   const [timer, setTimer] = useState(5);
   const [cycle, setCycle] = useState(0);
   const totalCycles = 4;
 
+  // Refs hold the live values so the interval never captures a stale closure
+  const phaseIdxRef = useRef(0);
+  const cycleRef = useRef(0);
+  const setStepRef = useRef(setStep); // stable ref to setStep
+  useEffect(() => { setStepRef.current = setStep; }, []);
+
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (step === 'breathing') {
-      interval = setInterval(() => {
-        setTimer((prev) => {
-          if (prev <= 1) {
-            // Switch phase
-            if (breathPhase === 'Inhale') {
-              setBreathPhase('Hold');
-              return 5;
-            } else if (breathPhase === 'Hold') {
-              setBreathPhase('Exhale');
-              return 5;
-            } else if (breathPhase === 'Exhale') {
-              setBreathPhase('Rest');
-              return 5;
-            } else {
-              // Rest phase finished
-              if (cycle >= totalCycles - 1) {
-                setStep('completed');
-                return 0;
-              }
-              setCycle(c => c + 1);
-              setBreathPhase('Inhale');
-              return 5;
-            }
+    if (step !== 'breathing') return;
+    const interval = setInterval(() => {
+      setTimer(prev => {
+        if (prev > 1) return prev - 1;
+        // Advance to next phase
+        const nextPhaseIdx = (phaseIdxRef.current + 1) % BREATH_PHASES.length;
+        phaseIdxRef.current = nextPhaseIdx;
+        if (nextPhaseIdx === 0) {
+          // Completed a full Inhale→Hold→Exhale→Hold cycle
+          const nextCycle = cycleRef.current + 1;
+          cycleRef.current = nextCycle;
+          if (nextCycle >= totalCycles) {
+            setStepRef.current('completed');
+            return 0;
           }
-          return prev - 1;
-        });
-      }, 1000);
-    }
+          setCycle(nextCycle);
+        }
+        setBreathPhase(BREATH_PHASES[nextPhaseIdx]);
+        return 5;
+      });
+    }, 1000);
     return () => clearInterval(interval);
-  }, [step, breathPhase, cycle]);
+  }, [step]); // only re-runs when step changes — no stale closures
 
   const startBreathing = () => {
-    setStep('breathing');
+    phaseIdxRef.current = 0;
+    cycleRef.current = 0;
     setBreathPhase('Inhale');
     setTimer(5);
     setCycle(0);
+    setStep('breathing');
   };
 
   if (!isOpen) return null;
@@ -1396,7 +1398,10 @@ const WorkMode = ({
     setWheelResult(null);
     setTimeout(() => {
       const n = wheelTasks.length;
-      const winnerIdx = Math.floor((newDeg % 360) / (360 / n)) % n;
+      // The wheel rotates clockwise by newDeg. The pointer is at the top.
+      // The segment under the pointer is at (360 - newDeg%360)%360 degrees from the top.
+      const angleUnderPointer = (360 - (newDeg % 360)) % 360;
+      const winnerIdx = Math.floor(angleUnderPointer / (360 / n)) % n;
       setWheelResult(wheelTasks[winnerIdx]);
       setIsSpinning(false);
     }, 4000);
@@ -1404,8 +1409,8 @@ const WorkMode = ({
 
   const renderWheelSegments = () => {
     const n = wheelTasks.length;
-    if (n === 0) return <circle cx="150" cy="150" r="130" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" strokeWidth="2" />;
-    const cx = 150, cy = 150, r = 130;
+    if (n === 0) return <circle cx="200" cy="200" r="175" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" strokeWidth="2" />;
+    const cx = 200, cy = 200, r = 175;
     const sliceAngle = (2 * Math.PI) / n;
     return (
       <>
@@ -1416,9 +1421,13 @@ const WorkMode = ({
           const x2 = cx + r * Math.cos(end), y2 = cy + r * Math.sin(end);
           const largeArc = sliceAngle > Math.PI ? 1 : 0;
           const mid = (start + end) / 2;
-          const tx = cx + r * 0.65 * Math.cos(mid);
-          const ty = cy + r * 0.65 * Math.sin(mid);
-          const label = task.title.length > 11 ? task.title.slice(0, 11) + '…' : task.title;
+          const tx = cx + r * 0.62 * Math.cos(mid);
+          const ty = cy + r * 0.62 * Math.sin(mid);
+          const label = task.title.length > 14 ? task.title.slice(0, 14) + '…' : task.title;
+          // Radial labels (text runs along the spoke). Flip labels in the left half so they're never upside-down.
+          const rawRotDeg = (mid * 180) / Math.PI;
+          const normalizedDeg = ((rawRotDeg % 360) + 360) % 360;
+          const labelRotDeg = normalizedDeg > 90 && normalizedDeg < 270 ? rawRotDeg + 180 : rawRotDeg;
           return (
             <g key={task.id}>
               <path
@@ -1432,10 +1441,10 @@ const WorkMode = ({
                 y={ty.toFixed(1)}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                fontSize="8"
+                fontSize="10"
                 fontWeight="bold"
                 fill="white"
-                transform={`rotate(${((mid * 180) / Math.PI + 90).toFixed(1)}, ${tx.toFixed(1)}, ${ty.toFixed(1)})`}
+                transform={`rotate(${labelRotDeg.toFixed(1)}, ${tx.toFixed(1)}, ${ty.toFixed(1)})`}
                 style={{ userSelect: 'none', pointerEvents: 'none' }}
               >
                 {label}
@@ -1443,7 +1452,7 @@ const WorkMode = ({
             </g>
           );
         })}
-        <circle cx="150" cy="150" r="18" fill="rgba(0,0,0,0.6)" stroke="rgba(255,255,255,0.3)" strokeWidth="2" />
+        <circle cx="200" cy="200" r="22" fill="rgba(0,0,0,0.6)" stroke="rgba(255,255,255,0.3)" strokeWidth="2" />
       </>
     );
   };
@@ -1701,8 +1710,8 @@ const WorkMode = ({
               {/* Fixed pointer at top */}
               <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 z-10 w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-t-[20px] border-t-white drop-shadow-lg" />
               <svg
-                width="300"
-                height="300"
+                width="400"
+                height="400"
                 style={{
                   transform: `rotate(${spinDeg}deg)`,
                   transition: isSpinning ? 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)' : 'none',

@@ -1600,91 +1600,96 @@ const WorkMode = ({
               )}
             </div>
 
-            <div className="grid grid-cols-4 gap-3">
-              {bingoBoard.map((task, i) => (
+            {/* Board + Timer side by side */}
+            <div className="flex items-start gap-8 flex-wrap justify-center">
+              {/* Board + shuffle */}
+              <div className="flex flex-col items-center gap-6">
+                <div className="grid grid-cols-4 gap-3">
+                  {bingoBoard.map((task, i) => (
+                    <button
+                      key={i}
+                      onClick={() => markCell(i)}
+                      disabled={!task}
+                      className={`w-28 h-28 rounded-2xl p-3 flex flex-col items-center justify-center text-center transition-all border text-xs font-bold leading-tight ${
+                        markedCells.has(i)
+                          ? 'bg-emerald-500/25 border-emerald-500/50 text-emerald-300'
+                          : task
+                          ? 'bg-white/5 border-white/10 hover:bg-white/10 text-white/80 cursor-pointer'
+                          : 'bg-white/5 border-white/5 text-white/20 cursor-default'
+                      }`}
+                    >
+                      {markedCells.has(i) && <Check size={16} className="mb-1 text-emerald-400 flex-shrink-0" />}
+                      <span className="line-clamp-3">{task?.title || '—'}</span>
+                    </button>
+                  ))}
+                </div>
                 <button
-                  key={i}
-                  onClick={() => markCell(i)}
-                  disabled={!task}
-                  className={`w-28 h-28 rounded-2xl p-3 flex flex-col items-center justify-center text-center transition-all border text-xs font-bold leading-tight ${
-                    markedCells.has(i)
-                      ? 'bg-emerald-500/25 border-emerald-500/50 text-emerald-300'
-                      : task
-                      ? 'bg-white/5 border-white/10 hover:bg-white/10 text-white/80 cursor-pointer'
-                      : 'bg-white/5 border-white/5 text-white/20 cursor-default'
-                  }`}
+                  onClick={() => { setBingoBoard(makeBingoBoard()); setMarkedCells(new Set()); }}
+                  className="flex items-center gap-2 px-8 py-3 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-2xl font-bold hover:bg-white/30 transition-all"
                 >
-                  {markedCells.has(i) && <Check size={16} className="mb-1 text-emerald-400 flex-shrink-0" />}
-                  <span className="line-clamp-3">{task?.title || '—'}</span>
+                  <RefreshCw size={16} />
+                  Shuffle Board
                 </button>
-              ))}
-            </div>
-
-            {/* Timer & Goal */}
-            <div className="w-full max-w-lg bg-white/5 border border-white/10 rounded-3xl p-6 space-y-5">
-              <div className="flex items-end justify-center gap-6 flex-wrap">
-                <div>
-                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Timer (min)</label>
-                  <input
-                    type="number" min={1} max={60} value={bingoTimerMin}
-                    onChange={e => {
-                      const m = Math.max(1, parseInt(e.target.value) || 1);
-                      setBingoTimerMin(m);
-                      if (!bingoTimerRunning) setBingoTimerSec(m * 60);
-                    }}
-                    disabled={bingoTimerRunning}
-                    className="w-20 p-2 bg-white/10 border border-white/20 rounded-xl text-sm text-white text-center outline-none focus:ring-2 focus:ring-white/20 disabled:opacity-50"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Line Goal</label>
-                  <input
-                    type="number" min={1} max={10} value={bingoGoalLines}
-                    onChange={e => setBingoGoalLines(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
-                    className="w-20 p-2 bg-white/10 border border-white/20 rounded-xl text-sm text-white text-center outline-none focus:ring-2 focus:ring-white/20"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setBingoTimerRunning(r => !r)}
-                    disabled={bingoTimerSec === 0}
-                    className="px-4 py-2 bg-white/20 border border-white/30 rounded-xl text-sm font-bold text-white hover:bg-white/30 transition-all flex items-center gap-2 disabled:opacity-40"
-                  >
-                    {bingoTimerRunning ? <Pause size={14} /> : <Play size={14} />}
-                    {bingoTimerRunning ? 'Pause' : 'Start'}
-                  </button>
-                  <button
-                    onClick={() => { setBingoTimerRunning(false); setBingoTimerSec(bingoTimerMin * 60); }}
-                    className="px-4 py-2 bg-white/10 border border-white/10 rounded-xl text-sm font-bold text-white/60 hover:bg-white/20 transition-all flex items-center gap-2"
-                  >
-                    <RotateCcw size={14} />
-                  </button>
-                </div>
               </div>
 
-              <div className="flex items-center justify-center gap-12 pt-2 border-t border-white/10">
-                <div className="text-center">
-                  <p className={`text-5xl font-mono font-bold tracking-tighter ${bingoTimerSec === 0 ? 'text-red-400' : 'text-white'}`}>
-                    {String(Math.floor(bingoTimerSec / 60)).padStart(2, '0')}:{String(bingoTimerSec % 60).padStart(2, '0')}
-                  </p>
-                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-1">Time remaining</p>
+              {/* Timer & Goal panel */}
+              <div className="bg-white/5 border border-white/10 rounded-3xl p-6 space-y-5 w-64 flex-shrink-0">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Timer (min)</label>
+                    <input
+                      type="number" min={1} max={60} value={bingoTimerMin}
+                      onChange={e => {
+                        const m = Math.max(1, parseInt(e.target.value) || 1);
+                        setBingoTimerMin(m);
+                        if (!bingoTimerRunning) setBingoTimerSec(m * 60);
+                      }}
+                      disabled={bingoTimerRunning}
+                      className="w-full p-2 bg-white/10 border border-white/20 rounded-xl text-sm text-white text-center outline-none focus:ring-2 focus:ring-white/20 disabled:opacity-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Line Goal</label>
+                    <input
+                      type="number" min={1} max={10} value={bingoGoalLines}
+                      onChange={e => setBingoGoalLines(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+                      className="w-full p-2 bg-white/10 border border-white/20 rounded-xl text-sm text-white text-center outline-none focus:ring-2 focus:ring-white/20"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setBingoTimerRunning(r => !r)}
+                      disabled={bingoTimerSec === 0}
+                      className="flex-1 px-3 py-2 bg-white/20 border border-white/30 rounded-xl text-sm font-bold text-white hover:bg-white/30 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
+                    >
+                      {bingoTimerRunning ? <Pause size={14} /> : <Play size={14} />}
+                      {bingoTimerRunning ? 'Pause' : 'Start'}
+                    </button>
+                    <button
+                      onClick={() => { setBingoTimerRunning(false); setBingoTimerSec(bingoTimerMin * 60); }}
+                      className="px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm font-bold text-white/60 hover:bg-white/20 transition-all"
+                    >
+                      <RotateCcw size={14} />
+                    </button>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <p className={`text-5xl font-mono font-bold tracking-tighter ${completedBingoLines >= bingoGoalLines && bingoGoalLines > 0 ? 'text-emerald-400' : 'text-white'}`}>
-                    {completedBingoLines}<span className="text-white/30 text-3xl">/{bingoGoalLines}</span>
-                  </p>
-                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-1">Lines completed</p>
+
+                <div className="pt-4 border-t border-white/10 space-y-4">
+                  <div className="text-center">
+                    <p className={`text-5xl font-mono font-bold tracking-tighter ${bingoTimerSec === 0 ? 'text-red-400' : 'text-white'}`}>
+                      {String(Math.floor(bingoTimerSec / 60)).padStart(2, '0')}:{String(bingoTimerSec % 60).padStart(2, '0')}
+                    </p>
+                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-1">Time remaining</p>
+                  </div>
+                  <div className="text-center">
+                    <p className={`text-5xl font-mono font-bold tracking-tighter ${completedBingoLines >= bingoGoalLines && bingoGoalLines > 0 ? 'text-emerald-400' : 'text-white'}`}>
+                      {completedBingoLines}<span className="text-white/30 text-3xl">/{bingoGoalLines}</span>
+                    </p>
+                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-1">Lines completed</p>
+                  </div>
                 </div>
               </div>
             </div>
-
-            <button
-              onClick={() => { setBingoBoard(makeBingoBoard()); setMarkedCells(new Set()); }}
-              className="flex items-center gap-2 px-8 py-3 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-2xl font-bold hover:bg-white/30 transition-all"
-            >
-              <RefreshCw size={16} />
-              Shuffle Board
-            </button>
           </motion.div>
         )}
 
@@ -3389,7 +3394,7 @@ const SidebarItem = ({ icon: Icon, label, active = false, collapsed = false }: {
     <Icon size={20} className="shrink-0" />
     {!collapsed && <span className="font-semibold text-sm whitespace-nowrap">{label}</span>}
     {collapsed && (
-      <div className="absolute left-full ml-4 px-3 py-1 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-widest rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 whitespace-nowrap border border-white/10">
+      <div className="absolute left-full ml-4 px-3 py-1 bg-black/80 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-widest rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[500] whitespace-nowrap border border-white/10 shadow-xl">
         {label}
       </div>
     )}
@@ -3521,7 +3526,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen text-white font-sans selection:bg-white/30 selection:text-white">
-      <div className="flex h-screen overflow-hidden">
+      <div className="flex h-screen">
         
         {/* Left Sidebar - Menu */}
         <aside className={`glass-sidebar flex flex-col p-6 transition-all duration-500 ease-in-out ${isSidebarCollapsed ? 'w-24' : 'w-64'}`}>

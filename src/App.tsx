@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   LayoutDashboard, 
   Target, 
@@ -1316,24 +1317,58 @@ const WorkMode = ({
     if (detailTask?.id === taskId) setDetailTask(null);
   };
 
+  // ---- Filters (shared across modes) ----
+  const [filterProject, setFilterProject] = useState('');
+  const [filterDuration, setFilterDuration] = useState('');
+
+  const filteredTasks = allTasks.filter(t => {
+    if (filterProject && t.projectId !== filterProject) return false;
+    if (filterDuration && t.estimatedDuration !== filterDuration) return false;
+    return true;
+  });
+  const filteredTodoTasks = filteredTasks.filter(t => t.status === 'todo');
+
   // ---- Bingo ----
-  const makeBingoBoard = (): (Task | null)[] => {
-    const todo = allTasks.filter(t => t.status === 'todo');
-    const shuffled = [...todo].sort(() => Math.random() - 0.5).slice(0, 16);
-    while (shuffled.length < 16) shuffled.push(null);
-    return shuffled;
+  const BINGO_LINES = [
+    [0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15],
+    [0,4,8,12],[1,5,9,13],[2,6,10,14],[3,7,11,15],
+    [0,5,10,15],[3,6,9,12]
+  ];
+
+  const makeBingoBoard = (tasks?: Task[]): (Task | null)[] => {
+    const src = tasks ?? filteredTodoTasks;
+    const shuffled = [...src].sort(() => Math.random() - 0.5).slice(0, 16);
+    while (shuffled.length < 16) shuffled.push(null as unknown as Task);
+    return shuffled as (Task | null)[];
   };
   const [bingoBoard, setBingoBoard] = useState<(Task | null)[]>(() => makeBingoBoard());
   const [markedCells, setMarkedCells] = useState<Set<number>>(new Set());
 
-  const checkBingo = (marked: Set<number>) => {
-    const lines = [
-      [0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15],
-      [0,4,8,12],[1,5,9,13],[2,6,10,14],[3,7,11,15],
-      [0,5,10,15],[3,6,9,12]
-    ];
-    return lines.some(line => line.every(i => marked.has(i)));
-  };
+  // Bingo timer
+  const [bingoTimerMin, setBingoTimerMin] = useState(5);
+  const [bingoTimerSec, setBingoTimerSec] = useState(5 * 60);
+  const [bingoTimerRunning, setBingoTimerRunning] = useState(false);
+  const [bingoGoalLines, setBingoGoalLines] = useState(1);
+
+  useEffect(() => {
+    if (!bingoTimerRunning) return;
+    const interval = setInterval(() => {
+      setBingoTimerSec(s => {
+        if (s <= 1) { setBingoTimerRunning(false); return 0; }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [bingoTimerRunning]);
+
+  // Reset bingo board when filters change
+  useEffect(() => {
+    setBingoBoard(makeBingoBoard());
+    setMarkedCells(new Set());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterProject, filterDuration]);
+
+  const checkBingo = (marked: Set<number>) => BINGO_LINES.some(line => line.every(i => marked.has(i)));
 
   const markCell = (i: number) => {
     if (!bingoBoard[i]) return;
@@ -1343,9 +1378,10 @@ const WorkMode = ({
   };
 
   const hasBingo = checkBingo(markedCells);
+  const completedBingoLines = BINGO_LINES.filter(line => line.every(i => markedCells.has(i))).length;
 
   // ---- Spinny Wheel ----
-  const wheelTasks = allTasks.filter(t => t.status === 'todo').slice(0, 8);
+  const wheelTasks = filteredTodoTasks.slice(0, 8);
   const [spinDeg, setSpinDeg] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
   const [wheelResult, setWheelResult] = useState<Task | null>(null);
@@ -1449,7 +1485,7 @@ const WorkMode = ({
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-4xl font-bold tracking-tight text-white">Work Mode</h1>
         <div className="flex gap-1 bg-white/10 p-1 rounded-2xl border border-white/20 shadow-sm backdrop-blur-md">
@@ -1464,6 +1500,39 @@ const WorkMode = ({
           ))}
         </div>
       </div>
+
+      {/* ---- FILTERS ---- */}
+      {mode !== 'task-database' && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <select
+            value={filterProject}
+            onChange={e => setFilterProject(e.target.value)}
+            className="px-3 py-2 bg-white/10 border border-white/20 rounded-xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
+          >
+            <option value="" className="bg-zinc-900">All Projects</option>
+            {projects.map(p => <option key={p.id} value={p.id} className="bg-zinc-900">{p.title}</option>)}
+          </select>
+          <select
+            value={filterDuration}
+            onChange={e => setFilterDuration(e.target.value)}
+            className="px-3 py-2 bg-white/10 border border-white/20 rounded-xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
+          >
+            <option value="" className="bg-zinc-900">All Durations</option>
+            {DURATION_OPTIONS.map(d => <option key={d} value={d} className="bg-zinc-900">{d}</option>)}
+          </select>
+          {(filterProject || filterDuration) && (
+            <>
+              <button
+                onClick={() => { setFilterProject(''); setFilterDuration(''); }}
+                className="px-3 py-2 text-xs font-bold text-white/40 hover:text-white border border-white/10 rounded-xl transition-colors flex items-center gap-1"
+              >
+                <X size={12} /> Clear
+              </button>
+              <span className="text-xs text-white/30">{filteredTodoTasks.length} task{filteredTodoTasks.length !== 1 ? 's' : ''} match</span>
+            </>
+          )}
+        </div>
+      )}
 
       <AnimatePresence mode="wait">
         {/* ---- TASK DATABASE ---- */}
@@ -1483,8 +1552,8 @@ const WorkMode = ({
               </div>
             )}
             {[
-              ...projects.map(p => ({ label: `${p.title} — ${allTasks.filter(t => t.projectId === p.id && t.status === 'done').length}/${allTasks.filter(t => t.projectId === p.id).length}`, tasks: allTasks.filter(t => t.projectId === p.id), key: p.id })),
-              { label: 'No Project', tasks: allTasks.filter(t => !t.projectId), key: '__none__' }
+              ...projects.map(p => ({ label: `${p.title} — ${filteredTasks.filter(t => t.projectId === p.id && t.status === 'done').length}/${filteredTasks.filter(t => t.projectId === p.id).length}`, tasks: filteredTasks.filter(t => t.projectId === p.id), key: p.id })),
+              { label: 'No Project', tasks: filteredTasks.filter(t => !t.projectId), key: '__none__' }
             ].filter(g => g.tasks.length > 0).map(group => (
               <Card key={group.key} title={group.label}>
                 <div className="space-y-1">
@@ -1523,7 +1592,7 @@ const WorkMode = ({
 
         {/* ---- BINGO: 4×4 board from task DB ---- */}
         {mode === 'bingo' && (
-          <motion.div key="bingo" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="flex flex-col items-center py-8 space-y-8">
+          <motion.div key="bingo" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="flex flex-col items-center py-4 space-y-6">
             <div className="text-center space-y-1">
               <h2 className="text-3xl font-bold text-white">Task Bingo</h2>
               <p className="text-white/40 text-sm">Click tasks to mark them. Get a row, column, or diagonal to win!</p>
@@ -1531,32 +1600,97 @@ const WorkMode = ({
                 <motion.p initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-2xl font-bold text-amber-400 pt-1">🎉 BINGO!</motion.p>
               )}
             </div>
-            <div className="grid grid-cols-4 gap-3">
-              {bingoBoard.map((task, i) => (
+
+            {/* Board + Timer side by side */}
+            <div className="flex items-start gap-8 flex-wrap justify-center">
+              {/* Board + shuffle */}
+              <div className="flex flex-col items-center gap-6">
+                <div className="grid grid-cols-4 gap-3">
+                  {bingoBoard.map((task, i) => (
+                    <button
+                      key={i}
+                      onClick={() => markCell(i)}
+                      disabled={!task}
+                      className={`w-28 h-28 rounded-2xl p-3 flex flex-col items-center justify-center text-center transition-all border text-xs font-bold leading-tight ${
+                        markedCells.has(i)
+                          ? 'bg-emerald-500/25 border-emerald-500/50 text-emerald-300'
+                          : task
+                          ? 'bg-white/5 border-white/10 hover:bg-white/10 text-white/80 cursor-pointer'
+                          : 'bg-white/5 border-white/5 text-white/20 cursor-default'
+                      }`}
+                    >
+                      {markedCells.has(i) && <Check size={16} className="mb-1 text-emerald-400 flex-shrink-0" />}
+                      <span className="line-clamp-3">{task?.title || '—'}</span>
+                    </button>
+                  ))}
+                </div>
                 <button
-                  key={i}
-                  onClick={() => markCell(i)}
-                  disabled={!task}
-                  className={`w-28 h-28 rounded-2xl p-3 flex flex-col items-center justify-center text-center transition-all border text-xs font-bold leading-tight ${
-                    markedCells.has(i)
-                      ? 'bg-emerald-500/25 border-emerald-500/50 text-emerald-300'
-                      : task
-                      ? 'bg-white/5 border-white/10 hover:bg-white/10 text-white/80 cursor-pointer'
-                      : 'bg-white/5 border-white/5 text-white/20 cursor-default'
-                  }`}
+                  onClick={() => { setBingoBoard(makeBingoBoard()); setMarkedCells(new Set()); }}
+                  className="flex items-center gap-2 px-8 py-3 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-2xl font-bold hover:bg-white/30 transition-all"
                 >
-                  {markedCells.has(i) && <Check size={16} className="mb-1 text-emerald-400 flex-shrink-0" />}
-                  <span className="line-clamp-3">{task?.title || '—'}</span>
+                  <RefreshCw size={16} />
+                  Shuffle Board
                 </button>
-              ))}
+              </div>
+
+              {/* Timer & Goal panel */}
+              <div className="bg-white/5 border border-white/10 rounded-3xl p-6 space-y-5 w-64 flex-shrink-0">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Timer (min)</label>
+                    <input
+                      type="number" min={1} max={60} value={bingoTimerMin}
+                      onChange={e => {
+                        const m = Math.max(1, parseInt(e.target.value) || 1);
+                        setBingoTimerMin(m);
+                        if (!bingoTimerRunning) setBingoTimerSec(m * 60);
+                      }}
+                      disabled={bingoTimerRunning}
+                      className="w-full p-2 bg-white/10 border border-white/20 rounded-xl text-sm text-white text-center outline-none focus:ring-2 focus:ring-white/20 disabled:opacity-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Line Goal</label>
+                    <input
+                      type="number" min={1} max={10} value={bingoGoalLines}
+                      onChange={e => setBingoGoalLines(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+                      className="w-full p-2 bg-white/10 border border-white/20 rounded-xl text-sm text-white text-center outline-none focus:ring-2 focus:ring-white/20"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setBingoTimerRunning(r => !r)}
+                      disabled={bingoTimerSec === 0}
+                      className="flex-1 px-3 py-2 bg-white/20 border border-white/30 rounded-xl text-sm font-bold text-white hover:bg-white/30 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
+                    >
+                      {bingoTimerRunning ? <Pause size={14} /> : <Play size={14} />}
+                      {bingoTimerRunning ? 'Pause' : 'Start'}
+                    </button>
+                    <button
+                      onClick={() => { setBingoTimerRunning(false); setBingoTimerSec(bingoTimerMin * 60); }}
+                      className="px-3 py-2 bg-white/10 border border-white/10 rounded-xl text-sm font-bold text-white/60 hover:bg-white/20 transition-all"
+                    >
+                      <RotateCcw size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-white/10 space-y-4">
+                  <div className="text-center">
+                    <p className={`text-5xl font-mono font-bold tracking-tighter ${bingoTimerSec === 0 ? 'text-red-400' : 'text-white'}`}>
+                      {String(Math.floor(bingoTimerSec / 60)).padStart(2, '0')}:{String(bingoTimerSec % 60).padStart(2, '0')}
+                    </p>
+                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-1">Time remaining</p>
+                  </div>
+                  <div className="text-center">
+                    <p className={`text-5xl font-mono font-bold tracking-tighter ${completedBingoLines >= bingoGoalLines && bingoGoalLines > 0 ? 'text-emerald-400' : 'text-white'}`}>
+                      {completedBingoLines}<span className="text-white/30 text-3xl">/{bingoGoalLines}</span>
+                    </p>
+                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-1">Lines completed</p>
+                  </div>
+                </div>
+              </div>
             </div>
-            <button
-              onClick={() => { setBingoBoard(makeBingoBoard()); setMarkedCells(new Set()); }}
-              className="flex items-center gap-2 px-8 py-3 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-2xl font-bold hover:bg-white/30 transition-all"
-            >
-              <RefreshCw size={16} />
-              Shuffle Board
-            </button>
           </motion.div>
         )}
 
@@ -1648,19 +1782,22 @@ const WorkMode = ({
             <Card title="Assign Tasks to Session">
               <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
                 <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">Select tasks to focus on</p>
-                {allTasks.filter(t => t.status === 'todo').map(task => (
+                {filteredTodoTasks.map(task => (
                   <div key={task.id} onClick={() => toggleSessionTask(task.id)}
                     className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border ${sessionTaskIds.includes(task.id) ? 'bg-white/15 border-white/30' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
                     <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${sessionTaskIds.includes(task.id) ? 'bg-white/80 border-white/80' : 'border-white/20'}`}>
                       {sessionTaskIds.includes(task.id) && <Check size={11} className="text-black" />}
                     </div>
+                    {task.isFrog && <span className="text-xs flex-shrink-0">🐸</span>}
                     <span className="text-sm text-white font-medium flex-1">{task.title}</span>
                     {task.estimatedDuration ? <span className="text-[10px] font-mono text-white/30">{task.estimatedDuration}</span> : null}
                     {task.projectId && <span className="text-[8px] font-bold text-white/30 uppercase tracking-widest">{projects.find(p => p.id === task.projectId)?.title}</span>}
                   </div>
                 ))}
-                {allTasks.filter(t => t.status === 'todo').length === 0 && (
-                  <p className="text-white/30 text-sm italic text-center py-8">No todo tasks. Add tasks in the Task DB tab.</p>
+                {filteredTodoTasks.length === 0 && (
+                  <p className="text-white/30 text-sm italic text-center py-8">
+                    {allTasks.some(t => t.status === 'todo') ? 'No tasks match the current filters.' : 'No todo tasks. Add tasks in the Task DB tab.'}
+                  </p>
                 )}
               </div>
             </Card>
@@ -3253,17 +3390,36 @@ const SettingsTab = ({
     </div>
   );
 };
-const SidebarItem = ({ icon: Icon, label, active = false, collapsed = false }: { icon: any, label: string, active?: boolean, collapsed?: boolean }) => (
-  <div className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-300 group relative ${active ? 'glass-button shadow-lg' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>
-    <Icon size={20} className="shrink-0" />
-    {!collapsed && <span className="font-semibold text-sm whitespace-nowrap">{label}</span>}
-    {collapsed && (
-      <div className="absolute left-full ml-4 px-3 py-1 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-widest rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 whitespace-nowrap border border-white/10">
-        {label}
-      </div>
-    )}
-  </div>
-);
+const SidebarItem = ({ icon: Icon, label, active = false, collapsed = false }: { icon: any, label: string, active?: boolean, collapsed?: boolean }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [tooltipY, setTooltipY] = useState<number | null>(null);
+
+  return (
+    <div
+      ref={ref}
+      onMouseEnter={() => {
+        if (collapsed && ref.current) {
+          const rect = ref.current.getBoundingClientRect();
+          setTooltipY(rect.top + rect.height / 2);
+        }
+      }}
+      onMouseLeave={() => setTooltipY(null)}
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-300 ${active ? 'glass-button shadow-lg' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}
+    >
+      <Icon size={20} className="shrink-0" />
+      {!collapsed && <span className="font-semibold text-sm whitespace-nowrap">{label}</span>}
+      {collapsed && tooltipY !== null && createPortal(
+        <div
+          style={{ position: 'fixed', top: tooltipY, left: 104, transform: 'translateY(-50%)', zIndex: 9999 }}
+          className="px-3 py-1.5 bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg whitespace-nowrap border border-white/20 shadow-2xl pointer-events-none"
+        >
+          {label}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+};
 
 const Card = ({ title, children, className = "" }: { title?: string, children: React.ReactNode, className?: string }) => (
   <div className={`glass-card rounded-3xl p-6 ${className}`}>
@@ -3390,7 +3546,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen text-white font-sans selection:bg-white/30 selection:text-white">
-      <div className="flex h-screen overflow-hidden">
+      <div className="flex h-screen">
         
         {/* Left Sidebar - Menu */}
         <aside className={`glass-sidebar flex flex-col p-6 transition-all duration-500 ease-in-out ${isSidebarCollapsed ? 'w-24' : 'w-64'}`}>

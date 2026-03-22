@@ -43,7 +43,8 @@ import {
   Dices,
   Grid3X3,
   Sparkles,
-  Check
+  Check,
+  Pencil
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI } from "@google/genai";
@@ -1086,17 +1087,26 @@ const blankNewTask = () => ({
   isFrog: false,
 });
 
+type DbSortCol = 'project' | 'duration' | 'priority' | 'deadline' | 'frog';
+const DURATION_RANK: Record<string, number> = { '<5min': 0, '<30min': 1, '30min+': 2 };
+const PRIORITY_RANK: Record<string, number> = { low: 0, medium: 1, high: 2 };
+
 const TaskDatabaseTab = ({
+  displayTasks,
   allTasks,
   projects,
   onUpdateTasks
 }: {
+  displayTasks: Task[],
   allTasks: Task[],
   projects: Project[],
   onUpdateTasks: (t: Task[]) => void
 }) => {
   const [newTask, setNewTask] = useState(blankNewTask());
   const [showForm, setShowForm] = useState(false);
+  const [editTask, setEditTask] = useState<Task | null>(null);
+  const [sortCol, setSortCol] = useState<DbSortCol | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const handleAddTask = () => {
     if (!newTask.title.trim()) return;
@@ -1117,9 +1127,58 @@ const TaskDatabaseTab = ({
     setShowForm(false);
   };
 
-  const deleteTask = (id: string) => onUpdateTasks(allTasks.filter(t => t.id !== id));
+  const deleteTask = (id: string) => {
+    onUpdateTasks(allTasks.filter(t => t.id !== id));
+    setEditTask(null);
+  };
+
+  const toggleDone = (task: Task) =>
+    onUpdateTasks(allTasks.map(t => t.id === task.id ? { ...t, status: t.status === 'done' ? 'todo' : 'done' } : t));
+
+  const saveEdit = () => {
+    if (!editTask) return;
+    onUpdateTasks(allTasks.map(t => t.id === editTask.id ? editTask : t));
+    setEditTask(null);
+  };
+
+  const handleSort = (col: DbSortCol) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('asc'); }
+  };
+
+  const sortedTasks = [...displayTasks].sort((a, b) => {
+    if (!sortCol) return 0;
+    let cmp = 0;
+    if (sortCol === 'project') {
+      const pa = projects.find(p => p.id === a.projectId)?.title ?? '';
+      const pb = projects.find(p => p.id === b.projectId)?.title ?? '';
+      cmp = pa.localeCompare(pb);
+    } else if (sortCol === 'duration') {
+      cmp = (DURATION_RANK[a.estimatedDuration ?? ''] ?? 99) - (DURATION_RANK[b.estimatedDuration ?? ''] ?? 99);
+    } else if (sortCol === 'priority') {
+      cmp = (PRIORITY_RANK[a.priority] ?? 0) - (PRIORITY_RANK[b.priority] ?? 0);
+    } else if (sortCol === 'deadline') {
+      const da = a.deadline ?? 'zzzz', db = b.deadline ?? 'zzzz';
+      cmp = da.localeCompare(db);
+    } else if (sortCol === 'frog') {
+      cmp = (b.isFrog ? 1 : 0) - (a.isFrog ? 1 : 0);
+    }
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
 
   const done = allTasks.filter(t => t.status === 'done').length;
+
+  const SortTh = ({ col, label, className = '' }: { col: DbSortCol; label: string; className?: string }) => (
+    <th
+      className={`pb-3 text-[10px] font-bold text-white/40 uppercase tracking-widest cursor-pointer hover:text-white/70 select-none transition-colors ${className}`}
+      onClick={() => handleSort(col)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {sortCol === col ? (sortDir === 'asc' ? ' ↑' : ' ↓') : <span className="opacity-20"> ↕</span>}
+      </span>
+    </th>
+  );
 
   return (
     <div className="space-y-6">
@@ -1128,6 +1187,7 @@ const TaskDatabaseTab = ({
           <span>{allTasks.length} tasks</span>
           <span>·</span>
           <span>{done} done</span>
+          {displayTasks.length !== allTasks.length && <><span>·</span><span>{displayTasks.length} shown</span></>}
         </div>
         <button
           onClick={() => setShowForm(true)}
@@ -1142,23 +1202,35 @@ const TaskDatabaseTab = ({
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-white/10">
+                <th className="pb-3 w-8" />
                 <th className="pb-3 text-[10px] font-bold text-white/40 uppercase tracking-widest">Task</th>
-                <th className="pb-3 text-[10px] font-bold text-white/40 uppercase tracking-widest">Project</th>
-                <th className="pb-3 text-[10px] font-bold text-white/40 uppercase tracking-widest text-center">Duration</th>
-                <th className="pb-3 text-[10px] font-bold text-white/40 uppercase tracking-widest text-center">Priority</th>
-                <th className="pb-3 text-[10px] font-bold text-white/40 uppercase tracking-widest text-center">Deadline</th>
+                <SortTh col="project" label="Project" />
+                <SortTh col="duration" label="Duration" className="text-center" />
+                <SortTh col="priority" label="Priority" className="text-center" />
+                <SortTh col="deadline" label="Deadline" className="text-center" />
+                <SortTh col="frog" label="🐸" className="text-center" />
                 <th className="pb-3 text-[10px] font-bold text-white/40 uppercase tracking-widest text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {allTasks.map(task => (
+              {sortedTasks.map(task => (
                 <tr key={task.id} className="group hover:bg-white/5 transition-colors">
+                  <td className="py-3 pr-2 w-8">
+                    <input
+                      type="checkbox"
+                      checked={task.status === 'done'}
+                      onChange={() => toggleDone(task)}
+                      className="w-4 h-4 accent-white rounded cursor-pointer"
+                    />
+                  </td>
                   <td className="py-3 pr-4">
                     <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-2">
-                        {task.isFrog && <span className="text-xs">🐸</span>}
-                        <span className={`font-semibold text-sm ${task.status === 'done' ? 'line-through text-white/30' : 'text-white'}`}>{task.title}</span>
-                      </div>
+                      <button
+                        onClick={() => setEditTask(task)}
+                        className={`font-semibold text-sm text-left hover:underline transition-colors ${task.status === 'done' ? 'line-through text-white/30' : 'text-white'}`}
+                      >
+                        {task.title}
+                      </button>
                       {task.notes && <span className="text-[10px] text-white/30 italic truncate max-w-[200px]">{task.notes}</span>}
                     </div>
                   </td>
@@ -1182,17 +1254,25 @@ const TaskDatabaseTab = ({
                       ? <span className="text-[10px] text-white/50">{task.deadline}</span>
                       : <span className="text-white/20">—</span>}
                   </td>
+                  <td className="py-3 pr-4 text-center">
+                    {task.isFrog ? <span className="text-base">🐸</span> : <span className="text-white/20">—</span>}
+                  </td>
                   <td className="py-3 text-right">
-                    <button onClick={() => deleteTask(task.id)} className="p-2 text-white/20 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => setEditTask(task)} className="p-2 text-white/20 hover:text-white transition-colors">
+                        <Pencil size={13} />
+                      </button>
+                      <button onClick={() => deleteTask(task.id)} className="p-2 text-white/20 hover:text-red-400 transition-colors">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
-              {allTasks.length === 0 && (
+              {displayTasks.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-white/20 italic text-sm">
-                    No tasks yet. Click "Add Task" to get started.
+                  <td colSpan={8} className="py-12 text-center text-white/20 italic text-sm">
+                    {allTasks.length === 0 ? 'No tasks yet. Click "Add Task" to get started.' : 'No tasks match the current filters.'}
                   </td>
                 </tr>
               )}
@@ -1200,6 +1280,86 @@ const TaskDatabaseTab = ({
           </table>
         </div>
       </Card>
+
+      {/* Edit Task Modal */}
+      <AnimatePresence>
+        {editTask && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6"
+            onClick={e => { if (e.target === e.currentTarget) saveEdit(); }}
+          >
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-lg bg-zinc-900/95 border border-white/10 rounded-3xl p-8 space-y-5 shadow-2xl"
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-white">Edit Task</h2>
+                <button onClick={() => setEditTask(null)} className="text-white/40 hover:text-white"><X size={20} /></button>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Title</label>
+                <input autoFocus type="text" value={editTask.title} onChange={e => setEditTask({ ...editTask, title: e.target.value })}
+                  className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/20" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Details / Notes</label>
+                <textarea value={editTask.notes || ''} onChange={e => setEditTask({ ...editTask, notes: e.target.value || undefined })}
+                  rows={3} className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/20 resize-none" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Project</label>
+                  <select value={editTask.projectId || ''} onChange={e => setEditTask({ ...editTask, projectId: e.target.value || undefined })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20">
+                    <option value="" className="bg-zinc-900">No Project</option>
+                    {projects.map(p => <option key={p.id} value={p.id} className="bg-zinc-900">{p.title}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Deadline</label>
+                  <input type="date" value={editTask.deadline || ''} onChange={e => setEditTask({ ...editTask, deadline: e.target.value || undefined })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Priority</label>
+                  <select value={editTask.priority} onChange={e => setEditTask({ ...editTask, priority: e.target.value as Task['priority'] })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20">
+                    <option value="low" className="bg-zinc-900">Low</option>
+                    <option value="medium" className="bg-zinc-900">Medium</option>
+                    <option value="high" className="bg-zinc-900">High</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 block">Est. Duration</label>
+                  <select value={editTask.estimatedDuration || ''} onChange={e => setEditTask({ ...editTask, estimatedDuration: e.target.value as DurationOption | undefined || undefined })}
+                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-white/20">
+                    <option value="" className="bg-zinc-900">—</option>
+                    {DURATION_OPTIONS.map(d => <option key={d} value={d} className="bg-zinc-900">{d}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-6">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input type="checkbox" checked={editTask.isFrog} onChange={e => setEditTask({ ...editTask, isFrog: e.target.checked })} className="w-4 h-4 accent-white rounded" />
+                  <span className="text-xs font-bold text-white/40 group-hover:text-white transition-colors">🐸 Frog</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input type="checkbox" checked={editTask.status === 'done'} onChange={e => setEditTask({ ...editTask, status: e.target.checked ? 'done' : 'todo' })} className="w-4 h-4 accent-white rounded" />
+                  <span className="text-xs font-bold text-white/40 group-hover:text-white transition-colors">Done</span>
+                </label>
+              </div>
+              <div className="flex gap-3 pt-2 border-t border-white/10">
+                <button onClick={saveEdit} className="flex-1 py-3 bg-white/20 border border-white/30 rounded-xl font-bold text-sm text-white hover:bg-white/30 transition-all">
+                  Save
+                </button>
+                <button onClick={() => deleteTask(editTask.id)}
+                  className="px-5 py-3 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl font-bold text-sm hover:bg-red-500/20 transition-all flex items-center gap-2">
+                  <Trash2 size={14} /> Delete
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Add Task Modal */}
       <AnimatePresence>
@@ -1322,10 +1482,13 @@ const WorkMode = ({
   // ---- Filters (shared across modes) ----
   const [filterProject, setFilterProject] = useState('');
   const [filterDuration, setFilterDuration] = useState('');
+  const [filterFrog, setFilterFrog] = useState<'' | 'frog' | 'non-frog'>('');
 
   const filteredTasks = allTasks.filter(t => {
     if (filterProject && t.projectId !== filterProject) return false;
     if (filterDuration && t.estimatedDuration !== filterDuration) return false;
+    if (filterFrog === 'frog' && !t.isFrog) return false;
+    if (filterFrog === 'non-frog' && t.isFrog) return false;
     return true;
   });
   const filteredTodoTasks = filteredTasks.filter(t => t.status === 'todo');
@@ -1368,7 +1531,7 @@ const WorkMode = ({
     setBingoBoard(makeBingoBoard());
     setMarkedCells(new Set());
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterProject, filterDuration]);
+  }, [filterProject, filterDuration, filterFrog]);
 
   const checkBingo = (marked: Set<number>) => BINGO_LINES.some(line => line.every(i => marked.has(i)));
 
@@ -1511,43 +1674,55 @@ const WorkMode = ({
       </div>
 
       {/* ---- FILTERS ---- */}
-      {mode !== 'task-database' && (
-        <div className="flex items-center gap-3 flex-wrap">
-          <select
-            value={filterProject}
-            onChange={e => setFilterProject(e.target.value)}
-            className="px-3 py-2 bg-white/10 border border-white/20 rounded-xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
-          >
-            <option value="" className="bg-zinc-900">All Projects</option>
-            {projects.map(p => <option key={p.id} value={p.id} className="bg-zinc-900">{p.title}</option>)}
-          </select>
-          <select
-            value={filterDuration}
-            onChange={e => setFilterDuration(e.target.value)}
-            className="px-3 py-2 bg-white/10 border border-white/20 rounded-xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
-          >
-            <option value="" className="bg-zinc-900">All Durations</option>
-            {DURATION_OPTIONS.map(d => <option key={d} value={d} className="bg-zinc-900">{d}</option>)}
-          </select>
-          {(filterProject || filterDuration) && (
-            <>
-              <button
-                onClick={() => { setFilterProject(''); setFilterDuration(''); }}
-                className="px-3 py-2 text-xs font-bold text-white/40 hover:text-white border border-white/10 rounded-xl transition-colors flex items-center gap-1"
-              >
-                <X size={12} /> Clear
-              </button>
-              <span className="text-xs text-white/30">{filteredTodoTasks.length} task{filteredTodoTasks.length !== 1 ? 's' : ''} match</span>
-            </>
-          )}
+      <div className="flex items-center gap-3 flex-wrap">
+        <select
+          value={filterProject}
+          onChange={e => setFilterProject(e.target.value)}
+          className="px-3 py-2 bg-white/10 border border-white/20 rounded-xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
+        >
+          <option value="" className="bg-zinc-900">All Projects</option>
+          {projects.map(p => <option key={p.id} value={p.id} className="bg-zinc-900">{p.title}</option>)}
+        </select>
+        <select
+          value={filterDuration}
+          onChange={e => setFilterDuration(e.target.value)}
+          className="px-3 py-2 bg-white/10 border border-white/20 rounded-xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
+        >
+          <option value="" className="bg-zinc-900">All Durations</option>
+          {DURATION_OPTIONS.map(d => <option key={d} value={d} className="bg-zinc-900">{d}</option>)}
+        </select>
+        {/* Frog filter */}
+        <div className="flex rounded-xl overflow-hidden border border-white/20 text-xs font-bold">
+          {(['', 'frog', 'non-frog'] as const).map((v, i) => (
+            <button
+              key={v}
+              onClick={() => setFilterFrog(v)}
+              className={`px-3 py-2 transition-colors ${i > 0 ? 'border-l border-white/20' : ''} ${filterFrog === v ? 'bg-white/25 text-white' : 'bg-white/5 text-white/40 hover:text-white/70'}`}
+            >
+              {v === '' ? 'All' : v === 'frog' ? '🐸 Frogs' : 'Non-Frog'}
+            </button>
+          ))}
         </div>
-      )}
+        {(filterProject || filterDuration || filterFrog) && (
+          <>
+            <button
+              onClick={() => { setFilterProject(''); setFilterDuration(''); setFilterFrog(''); }}
+              className="px-3 py-2 text-xs font-bold text-white/40 hover:text-white border border-white/10 rounded-xl transition-colors flex items-center gap-1"
+            >
+              <X size={12} /> Clear
+            </button>
+            {mode !== 'task-database' && (
+              <span className="text-xs text-white/30">{filteredTodoTasks.length} task{filteredTodoTasks.length !== 1 ? 's' : ''} match</span>
+            )}
+          </>
+        )}
+      </div>
 
       <AnimatePresence mode="wait">
         {/* ---- TASK DATABASE ---- */}
         {mode === 'task-database' && (
           <motion.div key="task-database" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-            <TaskDatabaseTab allTasks={allTasks} projects={projects} onUpdateTasks={onUpdateTasks} />
+            <TaskDatabaseTab displayTasks={filteredTasks} allTasks={allTasks} projects={projects} onUpdateTasks={onUpdateTasks} />
           </motion.div>
         )}
 
